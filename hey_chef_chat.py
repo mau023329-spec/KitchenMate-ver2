@@ -17,8 +17,89 @@ import queue
 import base64
 from openai import OpenAI
 import random
+import firebase_admin
+from firebase_admin import credentials, firestore
+import uuid
 
 # ================= CONFIG =================
+# Initialize Firebase only once
+if "db" not in st.session_state:
+    try:
+        cred_dict = {
+            "type": "service_account",
+            "project_id": st.secrets["firebase"]["project_id"],
+            "private_key_id": st.secrets["firebase"]["private_key_id"],
+            "private_key": st.secrets["firebase"]["private_key"],
+            "client_email": st.secrets["firebase"]["client_email"],
+            "client_id": st.secrets["firebase"]["client_id"],
+            "auth_uri": "https://accounts.google.com/o/oauth2/auth",
+            "token_uri": "https://oauth2.googleapis.com/token",
+            "auth_provider_x509_cert_url": "https://www.googleapis.com/oauth2/v1/certs",
+            "client_x509_cert_url": st.secrets["firebase"]["client_x509_cert_url"]
+        }
+        cred = credentials.Certificate(cred_dict)
+        firebase_admin.initialize_app(cred)
+        st.session_state.db = firestore.client()
+    except Exception as e:
+        st.error(f"Firebase connection failed: {str(e)}\n\nCheck .streamlit/secrets.toml")
+        st.stop()
+
+db = st.session_state.db
+
+# Auth & onboarding session state
+for key in ["is_authenticated", "user_id", "user_email", "show_onboarding", "user_preferences"]:
+    if key not in st.session_state:
+        st.session_state[key] = False if "auth" in key or "onboarding" in key else None if "email" in key else {}
+
+def show_login():
+    st.title("🍳 Welcome to KitchenMate")
+    email = st.text_input("Email (or leave blank for Guest)")
+    if st.button("Continue"):
+        if email:
+            uid = email.split('@')[0].lower().replace(".", "_")
+            st.session_state.user_id = uid
+            st.session_state.user_email = email
+        else:
+            st.session_state.user_id = f"guest_{uuid.uuid4().hex[:8]}"
+            st.session_state.user_email = "guest"
+        st.session_state.is_authenticated = True
+        st.session_state.show_onboarding = True
+        st.rerun()
+
+def onboarding():
+    st.title("Quick Setup")
+    diet = st.radio("Diet preference", ["Pure Veg", "Vegetarian", "Non-Veg", "Vegan", "Jain"])
+    allergies = st.text_input("Any allergies?")
+    
+    if st.button("Save & Start"):
+        prefs = {"diet": diet, "allergies": allergies}
+        db.collection("users").document(st.session_state.user_id).set({
+            "email": st.session_state.user_email,
+            "preferences": prefs,
+            "created_at": datetime.now().isoformat()
+        }, merge=True)
+        
+        st.session_state.user_preferences = prefs
+        st.session_state.show_onboarding = False
+        
+        # Apply to app
+        st.session_state.allergies = allergies
+        if diet == "Jain":
+            st.session_state.jain_mode = True
+        if diet in ["Pure Veg", "Vegan", "Jain"]:
+            st.session_state.pure_veg_mode = True
+            
+        st.success("All set! Let's cook.")
+        st.rerun()
+
+# Show login/onboarding if not done
+if not st.session_state.is_authenticated:
+    show_login()
+    st.stop()
+
+if st.session_state.show_onboarding:
+    onboarding()
+    st.stop()
 GROQ_API_KEY = st.secrets["GROQ_API_KEY"]
 OPENROUTER_API_KEY = st.secrets["OPENROUTER_API_KEY"]
 YOUTUBE_API_KEY = st.secrets["YOUTUBE_API_KEY"]
@@ -1822,7 +1903,32 @@ with tab_scan:
                             st.success(f"Added {len(selected)} items to inventory!")
                 else:
                     st.warning("No ingredients detected. Try a clearer photo.")
+# ────────────────────────────────────────────────
+#  AUTO-SAVE INVENTORY & RELATED DATA TO FIRESTORE
+# ────────────────────────────────────────────────
 
+if st.session_state.get("is_authenticated", False) and st.session_state.get("user_id"):
+    try:
+        user_data = {
+            "inventory": dict(st.session_state.inventory),  # convert to plain dict for JSON
+            "inventory_prices": dict(st.session_state.inventory_prices),
+            "inventory_expiry": dict(st.session_state.inventory_expiry),
+            "grocery_list": list(st.session_state.grocery_list),
+            "last_updated": datetime.now().isoformat()
+        }
+        
+        # Save (merge = True means update only these fields, don't overwrite others)
+        db.collection("users").document(st.session_state.user_id).set(
+            user_data,
+            merge=True
+        )
+        
+        # Optional: show tiny success message (remove if annoying)
+        # st.caption("Inventory auto-saved ✓")
+        
+    except Exception as e:
+        # Silent fail (don't break app), but log for you
+        print(f"Auto-save failed: {str(e)}")
 # Footer
 st.markdown("---")
 st.caption("KitchenMate By Manas  • Chat + Meal Planner + Grocery + Custom Recipes + Tried + Favourites • " + datetime.now().strftime("%Y-%m-%d"))
