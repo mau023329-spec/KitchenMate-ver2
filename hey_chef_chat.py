@@ -23,7 +23,9 @@ import uuid
 
 # ================= CONFIG =================
 # Initialize Firebase only once
-if "db" not in st.session_state:
+APP_NAME = "kitchenmate-default"
+
+if not firebase_admin._apps.get(APP_NAME):
     try:
         cred_dict = {
             "type": "service_account",
@@ -38,13 +40,13 @@ if "db" not in st.session_state:
             "client_x509_cert_url": st.secrets["firebase"]["client_x509_cert_url"]
         }
         cred = credentials.Certificate(cred_dict)
-        firebase_admin.initialize_app(cred)
-        st.session_state.db = firestore.client()
+        firebase_admin.initialize_app(cred, name=APP_NAME)
     except Exception as e:
         st.error(f"Firebase connection failed: {str(e)}\n\nCheck .streamlit/secrets.toml")
         st.stop()
 
-db = st.session_state.db
+# Safe access to db
+db = firestore.client(app=firebase_admin.get_app(APP_NAME))
 
 # Auth & onboarding session state
 for key in ["is_authenticated", "user_id", "user_email", "show_onboarding", "user_preferences"]:
