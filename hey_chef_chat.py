@@ -24,35 +24,58 @@ import uuid
 
 # ================= CONFIG =================
 # Initialize Firebase only once
+# ================= CONFIG =================
+# Initialize Firebase only once
 APP_NAME = "kitchenmate-default"
 
-if not firebase_admin._apps.get(APP_NAME):
-    try:
-        cred_dict = {
-            "type": "service_account",
-            "project_id": st.secrets["firebase"]["project_id"],
-            "private_key_id": st.secrets["firebase"]["private_key_id"],
-            "private_key": st.secrets["firebase"]["private_key"],
-            "client_email": st.secrets["firebase"]["client_email"],
-            "client_id": st.secrets["firebase"]["client_id"],
-            "auth_uri": "https://accounts.google.com/o/oauth2/auth",
-            "token_uri": "https://oauth2.googleapis.com/token",
-            "auth_provider_x509_cert_url": "https://www.googleapis.com/oauth2/v1/certs",
-            "client_x509_cert_url": st.secrets["firebase"]["client_x509_cert_url"]
-        }
-        cred = credentials.Certificate(cred_dict)
-        firebase_admin.initialize_app(cred, name=APP_NAME)
-    except Exception as e:
-        st.error(f"Firebase connection failed: {str(e)}\n\nCheck .streamlit/secrets.toml")
-        st.stop()
+def init_firebase():
+    """Initialize Firebase with error handling"""
+    if not firebase_admin._apps.get(APP_NAME):
+        try:
+            cred_dict = {
+                "type": "service_account",
+                "project_id": st.secrets["firebase"]["project_id"],
+                "private_key_id": st.secrets["firebase"]["private_key_id"],
+                "private_key": st.secrets["firebase"]["private_key"],
+                "client_email": st.secrets["firebase"]["client_email"],
+                "client_id": st.secrets["firebase"]["client_id"],
+                "auth_uri": "https://accounts.google.com/o/oauth2/auth",
+                "token_uri": "https://oauth2.googleapis.com/token",
+                "auth_provider_x509_cert_url": "https://www.googleapis.com/oauth2/v1/certs",
+                "client_x509_cert_url": st.secrets["firebase"]["client_x509_cert_url"]
+            }
+            cred = credentials.Certificate(cred_dict)
+            firebase_admin.initialize_app(cred, name=APP_NAME)
+            
+            # Test connection
+            db = firestore.client(app=firebase_admin.get_app(APP_NAME))
+            
+            # Try a simple operation to verify Firestore is ready
+            try:
+                test_ref = db.collection("_connection_test").document("test")
+                test_ref.set({"status": "connected", "timestamp": datetime.now().isoformat()})
+                test_ref.delete()
+                return db, None  # Success!
+                
+            except Exception as firestore_error:
+                error_msg = str(firestore_error)
+                if "NOT_FOUND" in error_msg or "NotFound" in error_msg:
+                    return db, "⚠️ Firestore Database not created yet. Please create it in Firebase Console: https://console.firebase.google.com/project/kitchenmate-ver1/firestore"
+                else:
+                    return db, f"Firestore connection error: {error_msg}"
+                    
+        except Exception as e:
+            return None, f"Firebase initialization failed: {str(e)}"
+    else:
+        db = firestore.client(app=firebase_admin.get_app(APP_NAME))
+        return db, None
 
-# Safe access to db
-db = firestore.client(app=firebase_admin.get_app(APP_NAME))
+# Initialize
+db, firebase_error = init_firebase()
 
-# Auth & onboarding session state
-for key in ["is_authenticated", "user_id", "user_email", "show_onboarding", "user_preferences"]:
-    if key not in st.session_state:
-        st.session_state[key] = False if "auth" in key or "onboarding" in key else None if "email" in key else {}
+if firebase_error:
+    st.warning(firebase_error)
+    st.info("✨ App will work without cloud storage - your data will be stored locally for this session only.")
 
 def show_login():
     st.title("🍳 Welcome to KitchenMate")
@@ -76,24 +99,46 @@ def onboarding():
     
     if st.button("Save & Start"):
         prefs = {"diet": diet, "allergies": allergies}
-        db.collection("users").document(st.session_state.user_id).set({
-            "email": st.session_state.user_email,
-            "preferences": prefs,
-            "created_at": datetime.now().isoformat()
-        }, merge=True)
         
-        st.session_state.user_preferences = prefs
-        st.session_state.show_onboarding = False
-        
-        # Apply to app
-        st.session_state.allergies = allergies
-        if diet == "Jain":
-            st.session_state.jain_mode = True
-        if diet in ["Pure Veg", "Vegan", "Jain"]:
-            st.session_state.pure_veg_mode = True
+        try:
+            # Try to save to Firestore
+            doc_ref = db.collection("users").document(st.session_state.user_id)
+            doc_ref.set({
+                "email": st.session_state.user_email,
+                "preferences": prefs,
+                "created_at": datetime.now().isoformat()
+            }, merge=True)
             
-        st.success("All set! Let's cook.")
-        st.rerun()
+            st.session_state.user_preferences = prefs
+            st.session_state.show_onboarding = False
+            
+            # Apply to app
+            st.session_state.allergies = allergies
+            if diet == "Jain":
+                st.session_state.jain_mode = True
+            if diet in ["Pure Veg", "Vegan", "Jain"]:
+                st.session_state.pure_veg_mode = True
+                
+            st.success("✅ All set! Let's cook.")
+            time.sleep(1)
+            st.rerun()
+            
+        except Exception as e:
+            # Show detailed error for debugging
+            st.error(f"❌ Firebase Error: {str(e)}")
+            st.warning("Your preferences weren't saved, but you can still use the app!")
+            
+            # Store locally even if Firebase fails
+            st.session_state.user_preferences = prefs
+            st.session_state.show_onboarding = False
+            st.session_state.allergies = allergies
+            if diet == "Jain":
+                st.session_state.jain_mode = True
+            if diet in ["Pure Veg", "Vegan", "Jain"]:
+                st.session_state.pure_veg_mode = True
+            
+            if st.button("Continue Anyway"):
+                st.rerun()
 
 # Show login/onboarding if not done
 if not st.session_state.is_authenticated:
@@ -966,6 +1011,16 @@ with st.sidebar:
     st.header("⚙️ Settings")
     
     st.markdown("---")
+with st.sidebar:
+    st.markdown("---")
+    st.caption("🔧 Firebase Status")
+    if firebase_error:
+        st.error("❌ Not Connected")
+        with st.expander("See Details"):
+            st.write(firebase_error)
+    else:
+        st.success("✅ Connected")
+        
     st.subheader("🎤 Voice Assistant")
     voice_enabled = st.toggle("Enable Voice Input/Output", value=st.session_state.voice_enabled)
     st.session_state.voice_enabled = voice_enabled
