@@ -1,0 +1,8 @@
+streamlit
+groq
+speechrecognition
+gtts
+youtube-transcript-api
+requests
+google-api-python-client
+openai
