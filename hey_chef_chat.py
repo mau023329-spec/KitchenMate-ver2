@@ -1027,16 +1027,203 @@ def extract_ingredients(text, jain_mode=False):
             if not name or len(name) < 3:
                 continue
             
-            # Reject cooking verbs or non-food
+def extract_ingredients(text, jain_mode=False):
+    """Enhanced ingredient extraction with stricter cleaning and Jain check"""
+    text = text.lower().strip()
+    
+    # Isolate ingredients section if possible
+    ing_markers = r'(ingredients?:?|सामग्री:?|required items:?|what you need:?)'
+    step_markers = r'(steps?:?|instructions?:?|method:?|विधि:?|how to make:?)'
+    
+    ing_start = re.search(ing_markers, text)
+    step_start = re.search(step_markers, text)
+    
+    if ing_start and step_start and ing_start.start() < step_start.start():
+        ing_text = text[ing_start.end():step_start.start()].strip()
+    elif ing_start:
+        ing_text = text[ing_start.end():].strip()
+    else:
+        ing_text = text
+    
+    ingredients = []
+    
+    # Main patterns (improved to split qty/unit/name cleaner)
+    patterns = [
+        r'(\d+(?:\.\d+)?(?:\s*-\s*\d+(?:\.\d+)?)?)?\s*(g|kg|gram|grams|ml|l|liter|litre|pcs?|piece|pieces|tsp|teaspoon|tbsp|tablespoon|cup|cups|pack|packet|medium|large|small)?\s+([a-z][\w\s\-]{3,})(?=\s*(?:,|\.|;|\n|$|\(|\[|to taste|as needed))',
+        r'(half|quarter|a|one|two|three|four|five|six|seven|eight|nine|ten|handful|pinch|some)?\s+([a-z][\w\s\-]{3,})(?=\s*(?:,|\.|;|\n|$|\(|\[|to taste|as needed))',
+        r'([a-z][\w\s\-]{3,})\s*(to taste|as needed|as required|a pinch of?|to garnish)',
+    ]
+    
+    for pattern in patterns:
+        for match in re.finditer(pattern, ing_text, re.IGNORECASE):
+            qty_str = "as needed"
+            name = ""
+            groups = match.groups()
+            
+            # Extract qty and name, strip extra words
+            if len(groups) >= 3 and groups[2]:
+                qty_num = groups[0] or ""
+                unit = groups[1] or ""
+                name = groups[2].strip()
+                qty_str = f"{qty_num} {unit}".strip() if qty_num or unit else "as needed"
+            elif len(groups) >= 2 and groups[1]:
+                qty_str = groups[0].strip() if groups[0] else "as needed"
+                name = groups[1].strip()
+            elif groups[0]:
+                name = groups[0].strip()
+                qty_str = groups[1].strip() if len(groups) > 1 and groups[1] else "as needed"
+            
+            # Clean name: remove "of", "a", "an", "some" if at start
+            name = re.sub(r'^(of|a|an|some)\s+', '', name).strip()
+            
+            # Skip invalid or short names
+            if not name or len(name) < 3:
+                continue
+            
+            # Reject patterns - comprehensive list
             reject_patterns = [
-                r'less', r'more', r'taste', r'adjust', r'according', r'required', r'little', r'some', r'few',
-                r'handful', r'pinch', r'amount', r'quantity', r'level', r'degree', r'based', r'prefer',
-                r'optional', r'for serving', r'method', r'instructions', r'prep', r'total time', r'ready',
-                r'enjoy', r'hot', r'cold', r'then', r'now', r'next', r'after', r'finally', r'of' , 
+                r'\b(less|more|extra|enough|plenty|sufficient|adequate)\b',
+                r'\b(amount|quantity|portion|serving|measure|measurement)\b',
+                r'\b(handful|pinch|dash|splash|sprinkle|drizzle)\b',
+                r'\b(little|some|few|several|many|much|lot)\b',
+                r'\b(half|quarter|third|double|triple)\b',
+                r'\b(piece|pieces|slice|slices|chunk|chunks)\b',
+                r'\b(level|heaping|rounded|packed)\b',
+                r'\b(taste|tasting|adjust|according|required|needed)\b',
+                r'\b(prefer|preference|optional|choice|variation)\b',
+                r'\b(mild|medium|spicy|hot|cold|warm|cool)\b',
+                r'\b(salty|sweet|sour|bitter|tangy|savory)\b',
+                r'\b(strong|weak|light|heavy|thick|thin)\b',
+                r'\b(cook|cooking|cooks|stir|stirring|stirs)\b',
+                r'\b(add|adding|adds|mix|mixing|mixes)\b',
+                r'\b(serve|serving|serves|fry|frying|fries)\b',
+                r'\b(boil|boiling|boils|bake|baking|bakes)\b',
+                r'\b(heat|heating|heats|preheat|preheating|preheats)\b',
+                r'\b(simmer|simmering|simmers|saute|sauteing|sautes)\b',
+                r'\b(roast|roasting|roasts|grill|grilling|grills)\b',
+                r'\b(steam|steaming|steams|blanch|blanching|blanches)\b',
+                r'\b(broil|broiling|broils|toast|toasting|toasts)\b',
+                r'\b(poach|poaching|poaches)\b',
+                r'\b(cooked|stirred|added|mixed|served|fried|boiled)\b',
+                r'\b(baked|heated|preheated|simmered|sauteed|roasted)\b',
+                r'\b(grilled|steamed|blanched|broiled|toasted|poached)\b',
+                r'\b(prepared|finished|combined|blended|whisked)\b',
+                r'\b(melted|dissolved|reduced|thickened)\b',
+                r'\b(chop|chopping|chops|slice|slicing|slices)\b',
+                r'\b(dice|dicing|dices|mince|mincing|minces)\b',
+                r'\b(grate|grating|grates|grind|grinding|grinds)\b',
+                r'\b(crush|crushing|crushes|peel|peeling|peels)\b',
+                r'\b(wash|washing|washes|rinse|rinsing|rinses)\b',
+                r'\b(drain|draining|drains|soak|soaking|soaks)\b',
+                r'\b(marinate|marinating|marinates|season|seasoning|seasons)\b',
+                r'\b(garnish|garnishing|garnishes|squeeze|squeezing|squeezes)\b',
+                r'\b(strain|straining|strains|filter|filtering|filters)\b',
+                r'\b(chopped|sliced|diced|minced|grated|ground)\b',
+                r'\b(crushed|peeled|washed|rinsed|drained|soaked)\b',
+                r'\b(marinated|seasoned|garnished|squeezed|strained)\b',
+                r'\b(filtered|cleaned|trimmed|cut|shredded)\b',
+                r'\b(pour|pouring|pours|poured|use|using|uses|used)\b',
+                r'\b(put|putting|puts|take|taking|takes|took|taken)\b',
+                r'\b(keep|keeping|keeps|kept|let|letting|lets)\b',
+                r'\b(bring|bringing|brings|brought|reduce|reducing|reduces|reduced)\b',
+                r'\b(turn|turning|turns|turned|flip|flipping|flips|flipped)\b',
+                r'\b(cover|covering|covers|covered|uncover|uncovering|uncovers|uncovered)\b',
+                r'\b(remove|removing|removes|removed|transfer|transferring|transfers|transferred)\b',
+                r'\b(place|placing|places|placed|set|setting|sets)\b',
+                r'\b(arrange|arranging|arranges|arranged)\b',
+                r'\b(blend|blending|blends|blended|whisk|whisking|whisks|whisked)\b',
+                r'\b(beat|beating|beats|beaten|whip|whipping|whips|whipped)\b',
+                r'\b(fold|folding|folds|folded|knead|kneading|kneads|kneaded)\b',
+                r'\b(combine|combining|combines|combined)\b',
+                r'\b(incorporate|incorporating|incorporates|incorporated)\b',
+                r'\b(toss|tossing|tosses|tossed)\b',
+                r'\b(then|now|next|after|before|during|while|until)\b',
+                r'\b(when|once|first|second|third|finally|lastly)\b',
+                r'\b(meanwhile|simultaneously|immediately|gradually)\b',
+                r'\b(already|still|yet|just|soon|later)\b',
+                r'\b(minute|minutes|hour|hours|second|seconds)\b',
+                r'\b(overnight|day|days|week|weeks|month|months)\b',
+                r'\b(of|in|on|at|to|for|with|from|by|about)\b',
+                r'\b(into|onto|over|under|above|below|between|among)\b',
+                r'\b(through|across|along|around|behind|beside)\b',
+                r'\b(near|against|without|within|towards|upon)\b',
+                r'\b(and|or|but|nor|yet|so|if|though|although)\b',
+                r'\b(because|since|unless|while|whereas|whether)\b',
+                r'\b(a|an|the|this|that|these|those)\b',
+                r'\b(my|your|his|her|its|our|their)\b',
+                r'\b(each|every|all|both|some|any|no|none)\b',
+                r'\b(it|they|them|we|us|you|he|she|him|her)\b',
+                r'\b(what|which|who|whom|whose|where|when|why|how)\b',
+                r'\b(be|is|are|am|was|were|been|being)\b',
+                r'\b(have|has|had|having|do|does|did|doing|done)\b',
+                r'\b(will|would|shall|should|can|could|may|might|must)\b',
+                r'\b(well|very|too|quite|rather|really|truly)\b',
+                r'\b(simply|just|only|merely|exactly|precisely)\b',
+                r'\b(still|yet|already|always|never|often|rarely)\b',
+                r'\b(quickly|slowly|gently|carefully|thoroughly)\b',
+                r'\b(evenly|uniformly|constantly|continuously)\b',
+                r'\b(make|makes|made|making|give|gives|gave|given|giving)\b',
+                r'\b(get|gets|got|gotten|getting|become|becomes|became|becoming)\b',
+                r'\b(see|sees|saw|seen|seeing|look|looks|looked|looking)\b',
+                r'\b(find|finds|found|finding|want|wants|wanted|wanting)\b',
+                r'\b(need|needs|needed|needing|try|tries|tried|trying)\b',
+                r'\b(help|helps|helped|helping|start|starts|started|starting)\b',
+                r'\b(stop|stops|stopped|stopping|continue|continues|continued|continuing)\b',
+                r'\b(not|no|none|never|neither|nor|yes|ok|okay|sure|certainly|definitely)\b',
+                r'\b(method|procedure|instructions|steps|directions)\b',
+                r'\b(recipe|preparation|prep|total|ready)\b',
+                r'\b(ingredients|ingredient|items|things)\b',
+                r'\b(note|tip|tips|important|remember)\b',
+                r'\b(optional|required|necessary|essential)\b',
+                r'\b(serve|serving|serves|served|enjoy|enjoying|enjoys|enjoyed)\b',
+                r'\b(garnish|garnished|garnishing|plate|plated|plating|presentation)\b',
+                r'\b(dish|bowl|pan|pot|container)\b',
+                r'\b(hot|cold|warm|cool|room temperature|chilled)\b',
+                r'\b(frozen|thawed|fresh|stale|ripe|unripe)\b',
+                r'\b(crispy|crunchy|soft|tender|firm|hard)\b',
+                r'\b(smooth|creamy|chunky|lumpy|grainy)\b',
+                r'\b(like|as|than|same|similar|different)\b',
+                r'\b(such|kind|type|sort|variety)\b',
+                r'\b(better|worse|best|worst|more|most|less|least)\b',
+                r'\b(bowl|pan|pot|wok|kadhai|tawa|griddle)\b',
+                r'\b(plate|dish|container|jar|bottle|bag)\b',
+                r'\b(spoon|fork|knife|spatula|ladle|whisk)\b',
+                r'\b(blender|mixer|grinder|processor|oven|stove)\b',
+                r'\b(top|bottom|side|center|middle|edge)\b',
+                r'\b(left|right|front|back|inside|outside)\b',
+                r'\b(up|down|high|low|deep|shallow)\b',
+                r'\b(to taste|as needed|as required|if needed)\b',
+                r'\b(for serving|for garnish|for decoration)\b',
+                r'\b(according to taste|based on preference)\b',
+                r'\b(such as|like this|for example)\b',
+                r'\b(in order|so that|make sure)\b',
+                r'\b(you can|you may|you should|you need)\b',
+                r'\b(zero|one|two|three|four|five|six|seven|eight|nine|ten)\b',
+                r'\b(eleven|twelve|thirteen|fourteen|fifteen|sixteen|seventeen|eighteen|nineteen|twenty)\b',
+                r'\b(thirty|forty|fifty|sixty|seventy|eighty|ninety|hundred|thousand)\b',
+                r'\b(first|second|third|fourth|fifth|sixth|seventh|eighth|ninth|tenth)\b',
+                r'\b(raw|undercooked|overcooked|done|ready|finished)\b',
+                r'\b(golden|brown|browned|caramelized|charred)\b',
+                r'\b(translucent|opaque|clear|cloudy)\b',
+                r'\b(thing|things|stuff|item|items)\b',
+                r'\b(way|ways|means|manner|method)\b',
+                r'\b(here|there|where|anywhere|somewhere|everywhere)\b',
+                r'\b(something|anything|nothing|everything)\b',
+                r'\b(video|recipe|cooking|kitchen|food|eat|eating)\b',
+                r'\b(delicious|yummy|tasty|flavorful|aromatic)\b',
+                r'\b(homemade|traditional|authentic|classic|modern)\b',
+                r'\b(easy|simple|quick|fast|slow|difficult|hard)\b',
+                r'\b(healthy|nutritious|diet|low fat|low calorie)\b',
+                r'\b(vegan|vegetarian|non veg|gluten free|dairy free)\b',
+                r'\b[a-z]\b',  # Single letters
+                r'\b\w{1,2}\b',  # 1-2 character words
             ]
+            
+            # Check against reject patterns
             if any(re.search(p, name) for p in reject_patterns):
                 continue
             
+            # Check if starts with cooking verb
             if re.match(r'^(cook|stir|add|mix|serve|fry|boil|bake|heat|preheat|chop|slice|dice|grate|grind|pour|simmer|use|put|take|keep|let|bring|reduce|thicken|turn|flip|cover|uncover)', name):
                 continue
             
