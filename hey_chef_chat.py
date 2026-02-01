@@ -52,20 +52,75 @@ if APP_NAME not in firebase_admin._apps:
 db = firestore.client(app=firebase_admin.get_app(APP_NAME))
 
 firebase_error = None  # No error by default
+
 def show_login():
     st.title("🍳 Welcome to KitchenMate")
-    email = st.text_input("Email (or leave blank for Guest)")
-    if st.button("Continue"):
-        if email:
-            uid = email.split('@')[0].lower().replace(".", "_")
-            st.session_state.user_id = uid
-            st.session_state.user_email = email
-        else:
+    
+    col1, col2 = st.columns(2)
+    
+    with col1:
+        st.subheader("Sign in with Google")
+        
+        # Firebase JS SDK + Google Sign-In
+        st.markdown(f"""
+            <script src="https://www.gstatic.com/firebasejs/10.14.1/firebase-app-compat.js"></script>
+            <script src="https://www.gstatic.com/firebasejs/10.14.1/firebase-auth-compat.js"></script>
+            <script>
+              const firebaseConfig = {{
+                apiKey: "{st.secrets['firebase_web']['apiKey']}",
+                authDomain: "{st.secrets['firebase_web']['authDomain']}",
+                projectId: "{st.secrets['firebase_web']['projectId']}",
+                storageBucket: "{st.secrets['firebase_web']['storageBucket']}",
+                messagingSenderId: "{st.secrets['firebase_web']['messagingSenderId']}",
+                appId: "{st.secrets['firebase_web']['appId']}"
+              }};
+              
+              firebase.initializeApp(firebaseConfig);
+              const auth = firebase.auth();
+              const provider = new firebase.auth.GoogleAuthProvider();
+              
+              function signInWithGoogle() {{
+                auth.signInWithPopup(provider)
+                  .then((result) => {{
+                    const user = result.user;
+                    // Send user info to Streamlit via query params or postMessage
+                    window.location.href = window.location.pathname + '?auth=success&uid=' + user.uid + '&email=' + encodeURIComponent(user.email);
+                  }})
+                  .catch((error) => {{
+                    console.error("Google Sign-In error:", error);
+                    alert("Sign-in failed: " + error.message);
+                  }});
+              }}
+            </script>
+            
+            <button onclick="signInWithGoogle()" style="background:#4285F4; color:white; padding:12px 24px; border:none; border-radius:4px; font-size:16px; cursor:pointer; width:100%;">
+              <img src="https://www.gstatic.com/firebasejs/ui/2.0.0/images/auth/google.svg" width="18" style="vertical-align:middle; margin-right:8px;">
+              Sign in with Google
+            </button>
+        """, unsafe_allow_html=True)
+    
+    with col2:
+        st.subheader("Or continue as Guest")
+        if st.button("Guest Mode"):
             st.session_state.user_id = f"guest_{uuid.uuid4().hex[:8]}"
             st.session_state.user_email = "guest"
-        st.session_state.is_authenticated = True
-        st.session_state.show_onboarding = True
-        st.rerun()
+            st.session_state.is_authenticated = True
+            st.session_state.show_onboarding = True
+            st.rerun()
+
+    # Handle Google auth callback (from query params)
+    query_params = st.experimental_get_query_params()
+    if "auth" in query_params and query_params["auth"][0] == "success":
+        uid = query_params.get("uid", [None])[0]
+        email = query_params.get("email", [None])[0]
+        if uid and email:
+            st.session_state.user_id = uid
+            st.session_state.user_email = email
+            st.session_state.is_authenticated = True
+            st.session_state.show_onboarding = True
+            # Clear query params after use
+            st.experimental_set_query_params()
+            st.rerun()
 
 def onboarding():
     st.title("Quick Setup")
@@ -223,7 +278,7 @@ if "show_onboarding" not in st.session_state:
     st.session_state.show_onboarding = False
 if "user_preferences" not in st.session_state:
     st.session_state.user_preferences = {}
-    
+
 # ================= VOICE HELPERS =================
 def listen_for_wake_word_chunk():
     """Listen for a short audio chunk and check for wake word"""
@@ -337,7 +392,7 @@ def detect_ingredients_from_image(image_bytes):
     try:
         base64_image = base64.b64encode(image_bytes).decode('utf-8')
         response = openrouter_client.chat.completions.create( 
-            model="google/gemini-flash-1.5-8b",
+            model="google/gemini-flash-1.5",
             messages=[
                 {
                     "role": "user",
@@ -984,7 +1039,22 @@ Fiber: X g
 Be realistic using standard Indian/home-cooked food values. Do NOT give total for whole recipe — only per serving."""
 
 # ================= MAIN APP =================
-st.set_page_config(page_title="KitchenMate", layout="wide")
+st.set_page_config(
+    page_title="KitchenMate - AI Cooking Assistant",
+    page_icon="🍳",
+    layout="wide",
+    initial_sidebar_state="expanded"
+)
+
+# PWA manifest & meta tags (required for installability)
+st.markdown("""
+    <link rel="manifest" href="/static/manifest.json">
+    <meta name="theme-color" content="#FF6B6B">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-status-bar-style" content="black">
+    <meta name="apple-mobile-web-app-title" content="KitchenMate">
+""", unsafe_allow_html=True)
+
 st.title("KitchenMate - Smart AI Assistant")
 
 tab1, tab2, tab3, tab4, tab5, tab6, tab_scan = st.tabs([
@@ -996,7 +1066,8 @@ tab1, tab2, tab3, tab4, tab5, tab6, tab_scan = st.tabs([
 # Sidebar Settings
 with st.sidebar:
     st.header("⚙️ Settings")
-    
+if st.session_state.get("user_email") and st.session_state.user_email != "guest":
+    st.sidebar.write(f"Logged in as: {st.session_state.user_email}")    
     st.markdown("---")
 with st.sidebar:
     st.markdown("---")
@@ -1080,7 +1151,9 @@ with st.sidebar:
     if st.button("Add Routine to Grocery List"):
         st.session_state.grocery_list.update(routine_items)
         st.success("Added routine items to grocery list!")
-
+if st.sidebar.button("Sign Out"):
+    st.session_state.clear()
+    st.rerun()
 # ────────────── CHAT TAB ──────────────
 with tab1:
     st.subheader("💬 Chat with Hey Chef")
@@ -1974,6 +2047,45 @@ if st.session_state.get("is_authenticated", False) and st.session_state.get("use
     except Exception as e:
         # Silent fail (don't break app), but log for you
         print(f"Auto-save failed: {str(e)}")
+# Floating PWA Install Button (appears on mobile browsers)
+st.markdown("""
+    <script>
+    let deferredPrompt;
+    
+    window.addEventListener('beforeinstallprompt', (e) => {
+        e.preventDefault();
+        deferredPrompt = e;
+        
+        // Create and show install button
+        const installButton = document.createElement('button');
+        installButton.textContent = '📱 Install App';
+        installButton.style.cssText = `
+            position: fixed;
+            bottom: 20px;
+            right: 20px;
+            padding: 12px 24px;
+            background: #FF6B6B;
+            color: white;
+            border: none;
+            border-radius: 25px;
+            font-weight: bold;
+            cursor: pointer;
+            z-index: 1000;
+            box-shadow: 0 4px 12px rgba(0,0,0,0.3);
+        `;
+        
+        installButton.addEventListener('click', async () => {
+            deferredPrompt.prompt();
+            const { outcome } = await deferredPrompt.userChoice;
+            deferredPrompt = null;
+            installButton.remove();
+        });
+        
+        document.body.appendChild(installButton);
+    });
+    </script>
+""", unsafe_allow_html=True)
+
 # Footer
 st.markdown("---")
 st.caption("KitchenMate By Manas  • Chat + Meal Planner + Grocery + Custom Recipes + Tried + Favourites • " + datetime.now().strftime("%Y-%m-%d"))
