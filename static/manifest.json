@@ -1,0 +1,22 @@
+{
+  "name": "KitchenMate - AI Cooking Assistant",
+  "short_name": "KitchenMate",
+  "description": "Your personal AI-powered cooking assistant with recipes, voice, inventory, and more",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#FFFFFF",
+  "theme_color": "#FF6B6B",
+  "orientation": "portrait",
+  "icons": [
+    {
+      "src": "/static/icon-192.png",
+      "sizes": "192x192",
+      "type": "image/png"
+    },
+    {
+      "src": "/static/icon-512.png",
+      "sizes": "512x512",
+      "type": "image/png"
+    }
+  ]
+}
