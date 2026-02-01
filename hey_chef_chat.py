@@ -86,36 +86,15 @@ def show_login():
     with col1:
         st.subheader("Sign in with Google")
     
-    st.components.v1.html(f"""
-        <script src="https://www.gstatic.com/firebasejs/10.14.1/firebase-app-compat.js"></script>
-        <script src="https://www.gstatic.com/firebasejs/10.14.1/firebase-auth-compat.js"></script>
-        
-        <button id="googleSignInBtn" style="background:#4285F4; color:white; padding:12px 24px; border:none; border-radius:4px; font-size:16px; cursor:pointer; width:100%; display:flex; align-items:center; justify-content:center; gap:8px;">
-            <img src="https://www.gstatic.com/firebasejs/ui/2.0.0/images/auth/google.svg" width="18">
-            Sign in with Google
-        </button>
-        
-        <script>
-            const firebaseConfig = {{
-                apiKey: "{st.secrets['firebase_web']['apiKey']}",
-                authDomain: "{st.secrets['firebase_web']['authDomain']}",
-                projectId: "{st.secrets['firebase_web']['projectId']}",
-                storageBucket: "{st.secrets['firebase_web']['storageBucket']}",
-                messagingSenderId: "{st.secrets['firebase_web']['messagingSenderId']}",
-                appId: "{st.secrets['firebase_web']['appId']}"
-            }};
-            
-            firebase.initializeApp(firebaseConfig);
-            const auth = firebase.auth();
-            const provider = new firebase.auth.GoogleAuthProvider();
-            
-            document.getElementById('googleSignInBtn').addEventListener('click', function() {{
-                // Use redirect instead of popup
-                auth.signInWithRedirect(provider);
-            }});
-        </script>
-    """, height=120)
-
+    # Button that opens login in new tab
+    st.markdown(f"""
+        <a href="/google-login" target="_blank" style="text-decoration:none;">
+            <button style="background:#4285F4; color:white; padding:12px 24px; border:none; border-radius:4px; font-size:16px; cursor:pointer; width:100%; display:flex; align-items:center; justify-content:center; gap:8px;">
+                <img src="https://www.gstatic.com/firebasejs/ui/2.0.0/images/auth/google.svg" width="18">
+                Sign in with Google
+            </button>
+        </a>
+    """, unsafe_allow_html=True)
     with col2:
         st.subheader("Or continue as Guest")
         if st.button("Guest Mode"):
