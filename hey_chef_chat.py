@@ -21,34 +21,8 @@ import random
 import firebase_admin
 from firebase_admin import credentials, firestore
 import uuid
+from google_auth_oauthlib.flow import Flow
 
-# Handle Firebase redirect callback
-if "auth" in st.experimental_get_query_params():
-    # After redirect, Firebase adds params automatically in some cases
-    # But we need to get the user from auth state
-    st.components.v1.html("""
-        <script src="https://www.gstatic.com/firebasejs/10.14.1/firebase-app-compat.js"></script>
-        <script src="https://www.gstatic.com/firebasejs/10.14.1/firebase-auth-compat.js"></script>
-        <script>
-            const firebaseConfig = { /* paste same config here */ };
-            firebase.initializeApp(firebaseConfig);
-            const auth = firebase.auth();
-            
-            auth.getRedirectResult().then((result) => {
-                if (result.user) {
-                    const user = result.user;
-                    // Send to Streamlit
-                    window.parent.postMessage({
-                        type: 'firebase_login',
-                        uid: user.uid,
-                        email: user.email
-                    }, "*");
-                }
-            }).catch((error) => {
-                console.error(error);
-            });
-        </script>
-    """, height=0)
 # ================= FIREBASE INITIALIZATION (safe for Streamlit reruns) =================
 
 APP_NAME = "kitchenmate-default"
@@ -76,105 +50,201 @@ if APP_NAME not in firebase_admin._apps:
 # Always define db safely
 db = firestore.client(app=firebase_admin.get_app(APP_NAME))
 
-firebase_error = None  # No error by default
+# ================= SESSION STATE INITIALIZATION =================
+if "is_authenticated" not in st.session_state:
+    st.session_state.is_authenticated = False
+if "user_id" not in st.session_state:
+    st.session_state.user_id = None
+if "user_email" not in st.session_state:
+    st.session_state.user_email = None
+if "user_name" not in st.session_state:
+    st.session_state.user_name = None
+if "show_onboarding" not in st.session_state:
+    st.session_state.show_onboarding = False
+if "user_preferences" not in st.session_state:
+    st.session_state.user_preferences = {}
+
+# ================= AUTHENTICATION FUNCTIONS =================
 
 def show_login():
+    """Display login page with Google OAuth and Guest mode"""
     st.title("🍳 Welcome to KitchenMate")
+    st.markdown("### Your AI-Powered Cooking Assistant")
     
     col1, col2 = st.columns(2)
     
     with col1:
         st.subheader("Sign in with Google")
+        
+        # Create Google OAuth URL
+        flow = Flow.from_client_config(
+            {
+                "web": {
+                    "client_id": st.secrets["google_oauth"]["client_id"],
+                    "client_secret": st.secrets["google_oauth"]["client_secret"],
+                    "auth_uri": "https://accounts.google.com/o/oauth2/auth",
+                    "token_uri": "https://oauth2.googleapis.com/token",
+                    "redirect_uris": [st.secrets["google_oauth"]["redirect_uri"]],
+                }
+            },
+            scopes=[
+                "https://www.googleapis.com/auth/userinfo.profile",
+                "https://www.googleapis.com/auth/userinfo.email"
+            ],
+            redirect_uri=st.secrets["google_oauth"]["redirect_uri"]
+        )
+        
+        authorization_url, state = flow.authorization_url(
+            access_type="offline",
+            include_granted_scopes="true"
+        )
+        
+        # Google Sign-In Button
+        st.markdown(f"""
+            <a href="{authorization_url}" target="_self" style="text-decoration:none;">
+                <button style="
+                    background: #4285F4; 
+                    color: white; 
+                    padding: 12px 24px; 
+                    border: none; 
+                    border-radius: 4px; 
+                    font-size: 16px; 
+                    cursor: pointer; 
+                    width: 100%; 
+                    display: flex; 
+                    align-items: center; 
+                    justify-content: center; 
+                    gap: 8px;
+                    font-weight: 500;
+                ">
+                    <img src="https://www.gstatic.com/firebasejs/ui/2.0.0/images/auth/google.svg" width="18">
+                    Sign in with Google
+                </button>
+            </a>
+        """, unsafe_allow_html=True)
+        
+        st.caption("Secure login via Google")
     
-    # Button that opens login in new tab
-    st.markdown(f"""
-        <a href="/google-login" target="_blank" style="text-decoration:none;">
-            <button style="background:#4285F4; color:white; padding:12px 24px; border:none; border-radius:4px; font-size:16px; cursor:pointer; width:100%; display:flex; align-items:center; justify-content:center; gap:8px;">
-                <img src="https://www.gstatic.com/firebasejs/ui/2.0.0/images/auth/google.svg" width="18">
-                Sign in with Google
-            </button>
-        </a>
-    """, unsafe_allow_html=True)
     with col2:
         st.subheader("Or continue as Guest")
-        if st.button("Guest Mode"):
+        st.info("Quick access without login\n(Data won't be saved)")
+        
+        if st.button("🚀 Continue as Guest", use_container_width=True):
             st.session_state.user_id = f"guest_{uuid.uuid4().hex[:8]}"
-            st.session_state.user_email = "guest"
+            st.session_state.user_email = "guest@kitchenmate.app"
+            st.session_state.user_name = "Guest"
             st.session_state.is_authenticated = True
             st.session_state.show_onboarding = True
-            st.rerun()
-
-    # Handle Google auth callback (from query params)
-    query_params = st.experimental_get_query_params()
-    if "auth" in query_params and query_params["auth"][0] == "success":
-        uid = query_params.get("uid", [None])[0]
-        email = query_params.get("email", [None])[0]
-        if uid and email:
-            st.session_state.user_id = uid
-            st.session_state.user_email = email
-            st.session_state.is_authenticated = True
-            st.session_state.show_onboarding = True
-            # Clear query params after use
-            st.experimental_set_query_params()
             st.rerun()
 
 def onboarding():
-    st.title("Quick Setup")
-    diet = st.radio("Diet preference", ["Pure Veg", "Vegetarian", "Non-Veg", "Vegan", "Jain"])
-    allergies = st.text_input("Any allergies?")
+    """Show onboarding screen for new users"""
+    st.title("⚙️ Quick Setup")
+    st.markdown(f"### Welcome, {st.session_state.user_name}! 👋")
     
-    if st.button("Save & Start"):
-        prefs = {"diet": diet, "allergies": allergies}
+    with st.form("onboarding_form"):
+        diet = st.radio(
+            "🥗 Diet Preference",
+            ["Pure Veg", "Vegetarian", "Non-Veg", "Vegan", "Jain"],
+            help="This helps us customize recipe suggestions"
+        )
         
-        try:
-            # Try to save to Firestore
-            doc_ref = db.collection("users").document(st.session_state.user_id)
-            doc_ref.set({
-                "email": st.session_state.user_email,
-                "preferences": prefs,
+        allergies = st.text_input(
+            "🚫 Allergies (comma-separated)",
+            placeholder="e.g., peanuts, dairy, shellfish"
+        )
+        
+        submitted = st.form_submit_button("Save & Start Cooking! 🚀", use_container_width=True)
+        
+        if submitted:
+            prefs = {
+                "diet": diet,
+                "allergies": allergies,
                 "created_at": datetime.now().isoformat()
-            }, merge=True)
+            }
             
+            # Save to Firestore (only for non-guest users)
+            if not st.session_state.user_email.startswith("guest"):
+                try:
+                    doc_ref = db.collection("users").document(st.session_state.user_id)
+                    doc_ref.set({
+                        "email": st.session_state.user_email,
+                        "name": st.session_state.user_name,
+                        "preferences": prefs
+                    }, merge=True)
+                    st.success("✅ Preferences saved!")
+                except Exception as e:
+                    st.warning(f"⚠️ Couldn't save to cloud: {str(e)}")
+            
+            # Apply preferences to session
             st.session_state.user_preferences = prefs
-            st.session_state.show_onboarding = False
-            
-            # Apply to app
             st.session_state.allergies = allergies
+            
             if diet == "Jain":
                 st.session_state.jain_mode = True
             if diet in ["Pure Veg", "Vegan", "Jain"]:
                 st.session_state.pure_veg_mode = True
-                
-            st.success("✅ All set! Let's cook.")
+            
+            st.session_state.show_onboarding = False
+            st.balloons()
             time.sleep(1)
             st.rerun()
-            
-        except Exception as e:
-            # Show detailed error for debugging
-            st.error(f"❌ Firebase Error: {str(e)}")
-            st.warning("Your preferences weren't saved, but you can still use the app!")
-            
-            # Store locally even if Firebase fails
-            st.session_state.user_preferences = prefs
-            st.session_state.show_onboarding = False
-            st.session_state.allergies = allergies
-            if diet == "Jain":
-                st.session_state.jain_mode = True
-            if diet in ["Pure Veg", "Vegan", "Jain"]:
-                st.session_state.pure_veg_mode = True
-            
-            if st.button("Continue Anyway"):
-                st.rerun()
 
-# Safe auth check (won't crash if key doesn't exist yet)
-if not st.session_state.get("is_authenticated", False):
+def load_user_data():
+    """Load user's saved data from Firestore"""
+    if st.session_state.user_email.startswith("guest"):
+        return  # Skip for guest users
+    
+    try:
+        doc_ref = db.collection("users").document(st.session_state.user_id)
+        doc = doc_ref.get()
+        
+        if doc.exists:
+            data = doc.to_dict()
+            
+            # Load preferences
+            if "preferences" in data:
+                prefs = data["preferences"]
+                st.session_state.user_preferences = prefs
+                st.session_state.allergies = prefs.get("allergies", "")
+                
+                diet = prefs.get("diet", "")
+                if diet == "Jain":
+                    st.session_state.jain_mode = True
+                if diet in ["Pure Veg", "Vegan", "Jain"]:
+                    st.session_state.pure_veg_mode = True
+            
+            # Load inventory
+            if "inventory" in data:
+                st.session_state.inventory = data["inventory"]
+            if "inventory_prices" in data:
+                st.session_state.inventory_prices = data["inventory_prices"]
+            if "inventory_expiry" in data:
+                st.session_state.inventory_expiry = data["inventory_expiry"]
+            if "grocery_list" in data:
+                st.session_state.grocery_list = set(data["grocery_list"])
+            
+    except Exception as e:
+        st.warning(f"Couldn't load saved data: {str(e)}")
+
+# ================= AUTH CHECK =================
+
+# Check if user is authenticated
+if not st.session_state.is_authenticated:
     show_login()
     st.stop()
 
-if st.session_state.get("show_onboarding", False):
+# Load user data on first login
+if st.session_state.is_authenticated and "data_loaded" not in st.session_state:
+    load_user_data()
+    st.session_state.data_loaded = True
+
+# Show onboarding if needed
+if st.session_state.show_onboarding:
     onboarding()
     st.stop()
 
+# ================= API KEYS =================
 GROQ_API_KEY = st.secrets["GROQ_API_KEY"]
 OPENROUTER_API_KEY = st.secrets["OPENROUTER_API_KEY"]
 YOUTUBE_API_KEY = st.secrets["YOUTUBE_API_KEY"]
@@ -186,6 +256,8 @@ openrouter_client = OpenAI(
     api_key=OPENROUTER_API_KEY,
     base_url="https://openrouter.ai/api/v1",
 )
+
+# ================= REST OF YOUR CODE CONTINUES HERE =================
 # ================= SESSION STATE =================
 if "messages" not in st.session_state:
     st.session_state.messages = []
