@@ -8,3 +8,5 @@ google-api-python-client
 openai
 firebase-admin
 pyrebase4
+streamlit-authenticator
+google-auth-oauthlib
