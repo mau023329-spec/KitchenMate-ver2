@@ -1147,102 +1147,197 @@ tab1, tab2, tab3, tab4, tab5, tab6, tab_scan = st.tabs([
 ])
 
 # Sidebar Settings
+# ================= COMPLETE SIDEBAR SECTION =================
+# Replace your entire sidebar section with this
+
 with st.sidebar:
     st.header("⚙️ Settings")
-if st.session_state.get("user_email") and st.session_state.user_email != "guest":
-    st.sidebar.write(f"Logged in as: {st.session_state.user_email}")    
+    
+    # User Info
+    if st.session_state.get("user_email") and st.session_state.user_email != "guest@kitchenmate.app":
+        st.write(f"👤 Logged in as:")
+        st.caption(st.session_state.user_email)
+    elif st.session_state.get("user_email") == "guest@kitchenmate.app":
+        st.info("🚶 Guest Mode")
+    
     st.markdown("---")
-with st.sidebar:
-    st.markdown("---")
+    
+    # ────────── FIREBASE STATUS ──────────
     st.caption("🔧 Firebase Status")
-    # Check Firebase connection status
-try:
-    # Test the connection
-    db.collection("_health_check").document("test").get()
-    st.success("✅ Firebase Connected")
-except Exception as e:
-    st.error("❌ Firebase Not Connected")
-    with st.expander("See Details"):
-        st.write(str(e))
-        
+    try:
+        # Test the connection
+        db.collection("_health_check").document("test").get()
+        st.success("✅ Connected")
+    except Exception as e:
+        st.error("❌ Not Connected")
+        with st.expander("See Details"):
+            st.write(str(e))
+    
+    st.markdown("---")
+    
+    # ────────── VOICE ASSISTANT ──────────
     st.subheader("🎤 Voice Assistant")
     voice_enabled = st.toggle("Enable Voice Input/Output", value=st.session_state.voice_enabled)
     st.session_state.voice_enabled = voice_enabled
     
     if st.session_state.voice_enabled:
-        voice_lang = st.radio("Voice Language", ["English", "Hindi"], key="voice_lang_select")
+        voice_lang = st.radio("Voice Language", ["English", "Hindi", "Marathi"], key="voice_lang_select")
         st.session_state.voice_language = voice_lang
     
     st.markdown("---")
+    
+    # ────────── YOUR ALLERGIES ──────────
     st.session_state.allergies = st.text_input(
         "🚫 Your Allergies",
         value=st.session_state.allergies,
-        help="I'll try to avoid these in suggestions!"
+        placeholder="e.g., peanuts, dairy, shellfish",
+        help="I'll avoid these in all recipe suggestions!"
     )
-    jain = st.toggle("Jain Mode (No root vegetables)", value=st.session_state.jain_mode)
-if jain != st.session_state.jain_mode:
-    st.session_state.jain_mode = jain
-    st.rerun()
+    
     st.markdown("---")
-    st.subheader("🎛️ Preferences")
-   
-    st.session_state.language_mode = st.radio("Language Mode", ["Hinglish", "English"])
-   
+    
+    # ────────── DIET PREFERENCES ──────────
+    st.subheader("🎛️ Diet Preferences")
+    
+    # Jain Mode
+    new_jain_mode = st.toggle("🙏 Jain Mode (No root vegetables)", value=st.session_state.jain_mode)
+    if new_jain_mode != st.session_state.jain_mode:
+        st.session_state.jain_mode = new_jain_mode
+        st.rerun()
+    
+    # Pure Veg Mode
     pure_veg = st.toggle("🌱 Pure Veg Mode", value=st.session_state.pure_veg_mode)
     if pure_veg != st.session_state.pure_veg_mode:
         st.session_state.pure_veg_mode = pure_veg
         st.rerun()
-   
-    health = st.toggle("💪 Health Mode", value=st.session_state.health_mode)
+    
+    # Health Mode
+    health = st.toggle("💪 Health Mode (Low oil, sugar)", value=st.session_state.health_mode)
     if health != st.session_state.health_mode:
         st.session_state.health_mode = health
         st.rerun()
-
-with st.sidebar:
+    
     st.markdown("---")
+    
+    # ────────── LANGUAGE MODE ──────────
+    st.subheader("🗣️ Language")
+    st.session_state.language_mode = st.radio(
+        "Response Language",
+        ["Hinglish", "English"],
+        help="Choose how I should talk to you"
+    )
+    
+    st.markdown("---")
+    
+    # ────────── UNITS ──────────
     st.subheader("📏 Units")
-    unit_choice = st.radio("Preferred unit system", ["Metric (kg, g, ml)", "American (lbs, oz, cups)"],
-                           index=0 if st.session_state.unit_system == "metric" else 1)
+    unit_choice = st.radio(
+        "Preferred unit system",
+        ["Metric (kg, g, ml)", "American (lbs, oz, cups)"],
+        index=0 if st.session_state.unit_system == "metric" else 1
+    )
     new_system = "metric" if "Metric" in unit_choice else "imperial"
     if new_system != st.session_state.unit_system:
         st.session_state.unit_system = new_system
         st.rerun()
-
-with st.sidebar:
+    
     st.markdown("---")
+    
+    # ────────── CUSTOM INGREDIENT ──────────
     st.subheader("➕ Custom Ingredient")
-    new_item = st.text_input("New Ingredient Name")
-    new_qty = st.number_input("Quantity (g/ml/pcs)", min_value=0, step=50)
-    new_price = st.number_input("Price per 100g or per piece (₹)", min_value=0.0, step=1.0)
-    if st.button("Add to Inventory") and new_item:
-        key = new_item.lower()
-        st.session_state.inventory[key] = new_qty
-        if new_price > 0:
-            st.session_state.inventory_prices[key] = new_price
-        st.success(f"Added {new_item} ({new_qty})")
+    
+    with st.form("add_ingredient_form"):
+        new_item = st.text_input("Ingredient Name", placeholder="e.g., basmati rice")
+        
+        col1, col2 = st.columns(2)
+        with col1:
+            new_qty = st.number_input("Quantity", min_value=0, step=50, value=500)
+        with col2:
+            unit_type = st.selectbox("Unit", ["g", "ml", "pcs"])
+        
+        new_price = st.number_input("Price per 100g/piece (₹)", min_value=0.0, step=1.0, value=0.0)
+        
+        submitted = st.form_submit_button("Add to Inventory", use_container_width=True)
+        
+        if submitted and new_item:
+            key = new_item.lower().strip()
+            st.session_state.inventory[key] = new_qty
+            if new_price > 0:
+                st.session_state.inventory_prices[key] = new_price
+            st.success(f"✅ Added {new_item} ({new_qty}{unit_type})")
+            st.rerun()
+    
+    # Remove ingredient
     if st.session_state.inventory:
-        remove_item = st.selectbox("Remove ingredient", [""] + list(st.session_state.inventory.keys()))
-        if remove_item and st.button("Remove"):
-            del st.session_state.inventory[remove_item]
-            st.session_state.inventory_prices.pop(remove_item, None)
-            st.success(f"Removed {remove_item}")
-
-with st.sidebar:
+        with st.expander("🗑️ Remove Ingredient"):
+            remove_item = st.selectbox("Select item to remove", [""] + sorted(list(st.session_state.inventory.keys())))
+            if remove_item and st.button("Remove", use_container_width=True):
+                del st.session_state.inventory[remove_item]
+                st.session_state.inventory_prices.pop(remove_item, None)
+                st.session_state.inventory_expiry.pop(remove_item, None)
+                st.success(f"🗑️ Removed {remove_item}")
+                st.rerun()
+    
     st.markdown("---")
+    
+    # ────────── ROUTINE WEEKLY GROCERY ──────────
     st.subheader("🛍️ Routine Weekly Grocery")
-    routine_items = ["rice", "flour", "oil", "milk", "eggs", "vegetables", "spices", "fruits"]
-    st.write("Common weekly buys:")
-    for item in routine_items:
-        st.write(f"- {item.capitalize()}")
-    if st.button("Add Routine to Grocery List"):
-        st.session_state.grocery_list.update(routine_items)
-        st.success("Added routine items to grocery list!")
-if st.sidebar.button("Sign Out"):
-    st.session_state.clear()
-    st.rerun()
+    
+    # Default routine items (user can customize)
+    if "routine_grocery_items" not in st.session_state:
+        st.session_state.routine_grocery_items = [
+            "rice", "flour", "oil", "milk", "eggs", 
+            "vegetables", "spices", "fruits", "dal", "sugar"
+        ]
+    
+    with st.expander("📝 Customize Routine Items"):
+        st.write("**Current routine items:**")
+        
+        # Show current items with remove option
+        items_to_remove = []
+        for item in st.session_state.routine_grocery_items:
+            col1, col2 = st.columns([3, 1])
+            with col1:
+                st.write(f"• {item.capitalize()}")
+            with col2:
+                if st.button("❌", key=f"remove_routine_{item}"):
+                    items_to_remove.append(item)
+        
+        # Remove items
+        for item in items_to_remove:
+            st.session_state.routine_grocery_items.remove(item)
+            st.rerun()
+        
+        # Add new routine item
+        new_routine = st.text_input("Add new routine item", placeholder="e.g., bread")
+        if st.button("Add") and new_routine:
+            if new_routine.lower() not in st.session_state.routine_grocery_items:
+                st.session_state.routine_grocery_items.append(new_routine.lower())
+                st.success(f"Added {new_routine}")
+                st.rerun()
+    
+    # Quick add routine to grocery list
+    if st.button("🛒 Add Routine to Grocery List", use_container_width=True):
+        st.session_state.grocery_list.update(st.session_state.routine_grocery_items)
+        st.success(f"✅ Added {len(st.session_state.routine_grocery_items)} items!")
+        st.rerun()
+    
+    st.markdown("---")
+    
+    # ────────── SIGN OUT ──────────
+    if st.button("🚪 Sign Out", use_container_width=True, type="primary"):
+        # Clear all session state
+        for key in list(st.session_state.keys()):
+            del st.session_state[key]
+        st.success("👋 Signed out successfully!")
+        time.sleep(1)
+        st.rerun()
+    
+    st.markdown("---")
+    st.caption("Made with by Manas")
 # ────────────── CHAT TAB ──────────────
 with tab1:
-    st.subheader("💬 Chat with Hey Chef")
+    st.subheader("💬 Chat with KitchenMate")
    
     st.session_state.servings = st.number_input("Number of servings", min_value=1, max_value=10, value=st.session_state.servings, step=1)
    
