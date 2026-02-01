@@ -1155,13 +1155,16 @@ if st.session_state.get("user_email") and st.session_state.user_email != "guest"
 with st.sidebar:
     st.markdown("---")
     st.caption("🔧 Firebase Status")
-    if firebase_error:
-        st.error("❌ Not Connected")
-        with st.expander("See Details"):
-            st.write(firebase_error)
-    else:
-        st.success("✅ Connected")
-
+    # Check Firebase connection status
+try:
+    # Test the connection
+    db.collection("_health_check").document("test").get()
+    st.success("✅ Firebase Connected")
+except Exception as e:
+    st.error("❌ Firebase Not Connected")
+    with st.expander("See Details"):
+        st.write(str(e))
+        
     st.subheader("🎤 Voice Assistant")
     voice_enabled = st.toggle("Enable Voice Input/Output", value=st.session_state.voice_enabled)
     st.session_state.voice_enabled = voice_enabled
