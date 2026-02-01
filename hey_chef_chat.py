@@ -59,45 +59,46 @@ def show_login():
     col1, col2 = st.columns(2)
     
     with col1:
-        st.subheader("Sign in with Google")
+       st.subheader("Sign in with Google")
+    
+    # Use st.components.v1.html instead of st.markdown for better JS isolation
+    st.components.v1.html(f"""
+        <script src="https://www.gstatic.com/firebasejs/10.14.1/firebase-app-compat.js"></script>
+        <script src="https://www.gstatic.com/firebasejs/10.14.1/firebase-auth-compat.js"></script>
         
-        # Firebase JS SDK + Google Sign-In
-        st.markdown(f"""
-            <script src="https://www.gstatic.com/firebasejs/10.14.1/firebase-app-compat.js"></script>
-            <script src="https://www.gstatic.com/firebasejs/10.14.1/firebase-auth-compat.js"></script>
-            <script>
-              const firebaseConfig = {{
+        <button id="googleSignInBtn" style="background:#4285F4; color:white; padding:12px 24px; border:none; border-radius:4px; font-size:16px; cursor:pointer; width:100%; display:flex; align-items:center; justify-content:center; gap:8px;">
+            <img src="https://www.gstatic.com/firebasejs/ui/2.0.0/images/auth/google.svg" width="18">
+            Sign in with Google
+        </button>
+        
+        <script>
+            const firebaseConfig = {{
                 apiKey: "{st.secrets['firebase_web']['apiKey']}",
                 authDomain: "{st.secrets['firebase_web']['authDomain']}",
                 projectId: "{st.secrets['firebase_web']['projectId']}",
                 storageBucket: "{st.secrets['firebase_web']['storageBucket']}",
                 messagingSenderId: "{st.secrets['firebase_web']['messagingSenderId']}",
                 appId: "{st.secrets['firebase_web']['appId']}"
-              }};
-              
-              firebase.initializeApp(firebaseConfig);
-              const auth = firebase.auth();
-              const provider = new firebase.auth.GoogleAuthProvider();
-              
-              function signInWithGoogle() {{
-                auth.signInWithPopup(provider)
-                  .then((result) => {{
-                    const user = result.user;
-                    // Send user info to Streamlit via query params or postMessage
-                    window.location.href = window.location.pathname + '?auth=success&uid=' + user.uid + '&email=' + encodeURIComponent(user.email);
-                  }})
-                  .catch((error) => {{
-                    console.error("Google Sign-In error:", error);
-                    alert("Sign-in failed: " + error.message);
-                  }});
-              }}
-            </script>
+            }};
             
-            <button onclick="signInWithGoogle()" style="background:#4285F4; color:white; padding:12px 24px; border:none; border-radius:4px; font-size:16px; cursor:pointer; width:100%;">
-              <img src="https://www.gstatic.com/firebasejs/ui/2.0.0/images/auth/google.svg" width="18" style="vertical-align:middle; margin-right:8px;">
-              Sign in with Google
-            </button>
-        """, unsafe_allow_html=True)
+            firebase.initializeApp(firebaseConfig);
+            const auth = firebase.auth();
+            const provider = new firebase.auth.GoogleAuthProvider();
+            
+            document.getElementById('googleSignInBtn').onclick = function() {{
+                auth.signInWithPopup(provider)
+                    .then((result) => {{
+                        const user = result.user;
+                        // Redirect with query params
+                        window.location.href = window.location.pathname + '?auth=success&uid=' + user.uid + '&email=' + encodeURIComponent(user.email);
+                    }})
+                    .catch((error) => {{
+                        console.error("Google Sign-In error:", error);
+                        alert("Sign-in failed: " + error.message);
+                    }});
+            }};
+        </script>
+    """, height=120)
     
     with col2:
         st.subheader("Or continue as Guest")
