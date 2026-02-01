@@ -22,61 +22,36 @@ import firebase_admin
 from firebase_admin import credentials, firestore
 import uuid
 
-# ================= CONFIG =================
-# Initialize Firebase only once
-# ================= CONFIG =================
-# Initialize Firebase only once
+# ================= FIREBASE INITIALIZATION (safe for Streamlit reruns) =================
+import firebase_admin
+from firebase_admin import credentials, firestore
+
 APP_NAME = "kitchenmate-default"
 
-def init_firebase():
-    """Initialize Firebase with error handling"""
-    if not firebase_admin._apps.get(APP_NAME):
-        try:
-            cred_dict = {
-                "type": "service_account",
-                "project_id": st.secrets["firebase"]["project_id"],
-                "private_key_id": st.secrets["firebase"]["private_key_id"],
-                "private_key": st.secrets["firebase"]["private_key"],
-                "client_email": st.secrets["firebase"]["client_email"],
-                "client_id": st.secrets["firebase"]["client_id"],
-                "auth_uri": "https://accounts.google.com/o/oauth2/auth",
-                "token_uri": "https://oauth2.googleapis.com/token",
-                "auth_provider_x509_cert_url": "https://www.googleapis.com/oauth2/v1/certs",
-                "client_x509_cert_url": st.secrets["firebase"]["client_x509_cert_url"]
-            }
-            cred = credentials.Certificate(cred_dict)
-            firebase_admin.initialize_app(cred, name=APP_NAME)
-            
-            # Test connection
-            db = firestore.client(app=firebase_admin.get_app(APP_NAME))
-            
-            # Try a simple operation to verify Firestore is ready
-            try:
-                test_ref = db.collection("_connection_test").document("test")
-                test_ref.set({"status": "connected", "timestamp": datetime.now().isoformat()})
-                test_ref.delete()
-                return db, None  # Success!
-                
-            except Exception as firestore_error:
-                error_msg = str(firestore_error)
-                if "NOT_FOUND" in error_msg or "NotFound" in error_msg:
-                    return db, "⚠️ Firestore Database not created yet. Please create it in Firebase Console: https://console.firebase.google.com/project/kitchenmate-ver1/firestore"
-                else:
-                    return db, f"Firestore connection error: {error_msg}"
-                    
-        except Exception as e:
-            return None, f"Firebase initialization failed: {str(e)}"
-    else:
-        db = firestore.client(app=firebase_admin.get_app(APP_NAME))
-        return db, None
+if APP_NAME not in firebase_admin._apps:
+    try:
+        cred_dict = {
+            "type": "service_account",
+            "project_id": st.secrets["firebase"]["project_id"],
+            "private_key_id": st.secrets["firebase"]["private_key_id"],
+            "private_key": st.secrets["firebase"]["private_key"],
+            "client_email": st.secrets["firebase"]["client_email"],
+            "client_id": st.secrets["firebase"]["client_id"],
+            "auth_uri": "https://accounts.google.com/o/oauth2/auth",
+            "token_uri": "https://oauth2.googleapis.com/token",
+            "auth_provider_x509_cert_url": "https://www.googleapis.com/oauth2/v1/certs",
+            "client_x509_cert_url": st.secrets["firebase"]["client_x509_cert_url"]
+        }
+        cred = credentials.Certificate(cred_dict)
+        firebase_admin.initialize_app(cred, name=APP_NAME)
+    except Exception as e:
+        st.error(f"Firebase initialization failed: {str(e)}\nCheck secrets in Streamlit Cloud")
+        st.stop()
 
-# Initialize
-db, firebase_error = init_firebase()
+# Always define db safely
+db = firestore.client(app=firebase_admin.get_app(APP_NAME))
 
-if firebase_error:
-    st.warning(firebase_error)
-    st.info("✨ App will work without cloud storage - your data will be stored locally for this session only.")
-
+firebase_error = None  # No error by default
 def show_login():
     st.title("🍳 Welcome to KitchenMate")
     email = st.text_input("Email (or leave blank for Guest)")
@@ -140,14 +115,15 @@ def onboarding():
             if st.button("Continue Anyway"):
                 st.rerun()
 
-# Show login/onboarding if not done
-if not st.session_state.is_authenticated:
+# Safe auth check (won't crash if key doesn't exist yet)
+if not st.session_state.get("is_authenticated", False):
     show_login()
     st.stop()
 
-if st.session_state.show_onboarding:
+if st.session_state.get("show_onboarding", False):
     onboarding()
     st.stop()
+
 GROQ_API_KEY = st.secrets["GROQ_API_KEY"]
 OPENROUTER_API_KEY = st.secrets["OPENROUTER_API_KEY"]
 YOUTUBE_API_KEY = st.secrets["YOUTUBE_API_KEY"]
@@ -236,7 +212,18 @@ if "new_command_available" not in st.session_state:
     st.session_state.new_command_available = False
 if "listening_error" not in st.session_state:
     st.session_state.listening_error = None
-
+# Initialize auth-related session state (prevents AttributeError)
+if "is_authenticated" not in st.session_state:
+    st.session_state.is_authenticated = False
+if "user_id" not in st.session_state:
+    st.session_state.user_id = None
+if "user_email" not in st.session_state:
+    st.session_state.user_email = None
+if "show_onboarding" not in st.session_state:
+    st.session_state.show_onboarding = False
+if "user_preferences" not in st.session_state:
+    st.session_state.user_preferences = {}
+    
 # ================= VOICE HELPERS =================
 def listen_for_wake_word_chunk():
     """Listen for a short audio chunk and check for wake word"""
@@ -1020,7 +1007,7 @@ with st.sidebar:
             st.write(firebase_error)
     else:
         st.success("✅ Connected")
-        
+
     st.subheader("🎤 Voice Assistant")
     voice_enabled = st.toggle("Enable Voice Input/Output", value=st.session_state.voice_enabled)
     st.session_state.voice_enabled = voice_enabled
