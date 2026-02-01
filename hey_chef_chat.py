@@ -22,9 +22,34 @@ import firebase_admin
 from firebase_admin import credentials, firestore
 import uuid
 
+# Handle Firebase redirect callback
+if "auth" in st.experimental_get_query_params():
+    # After redirect, Firebase adds params automatically in some cases
+    # But we need to get the user from auth state
+    st.components.v1.html("""
+        <script src="https://www.gstatic.com/firebasejs/10.14.1/firebase-app-compat.js"></script>
+        <script src="https://www.gstatic.com/firebasejs/10.14.1/firebase-auth-compat.js"></script>
+        <script>
+            const firebaseConfig = { /* paste same config here */ };
+            firebase.initializeApp(firebaseConfig);
+            const auth = firebase.auth();
+            
+            auth.getRedirectResult().then((result) => {
+                if (result.user) {
+                    const user = result.user;
+                    // Send to Streamlit
+                    window.parent.postMessage({
+                        type: 'firebase_login',
+                        uid: user.uid,
+                        email: user.email
+                    }, "*");
+                }
+            }).catch((error) => {
+                console.error(error);
+            });
+        </script>
+    """, height=0)
 # ================= FIREBASE INITIALIZATION (safe for Streamlit reruns) =================
-import firebase_admin
-from firebase_admin import credentials, firestore
 
 APP_NAME = "kitchenmate-default"
 
@@ -59,9 +84,8 @@ def show_login():
     col1, col2 = st.columns(2)
     
     with col1:
-       st.subheader("Sign in with Google")
+        st.subheader("Sign in with Google")
     
-    # Use st.components.v1.html instead of st.markdown for better JS isolation
     st.components.v1.html(f"""
         <script src="https://www.gstatic.com/firebasejs/10.14.1/firebase-app-compat.js"></script>
         <script src="https://www.gstatic.com/firebasejs/10.14.1/firebase-auth-compat.js"></script>
@@ -85,21 +109,13 @@ def show_login():
             const auth = firebase.auth();
             const provider = new firebase.auth.GoogleAuthProvider();
             
-            document.getElementById('googleSignInBtn').onclick = function() {{
-                auth.signInWithPopup(provider)
-                    .then((result) => {{
-                        const user = result.user;
-                        // Redirect with query params
-                        window.location.href = window.location.pathname + '?auth=success&uid=' + user.uid + '&email=' + encodeURIComponent(user.email);
-                    }})
-                    .catch((error) => {{
-                        console.error("Google Sign-In error:", error);
-                        alert("Sign-in failed: " + error.message);
-                    }});
-            }};
+            document.getElementById('googleSignInBtn').addEventListener('click', function() {{
+                // Use redirect instead of popup
+                auth.signInWithRedirect(provider);
+            }});
         </script>
     """, height=120)
-    
+
     with col2:
         st.subheader("Or continue as Guest")
         if st.button("Guest Mode"):
@@ -280,6 +296,21 @@ if "show_onboarding" not in st.session_state:
 if "user_preferences" not in st.session_state:
     st.session_state.user_preferences = {}
 
+
+# Listen for Firebase login from iframe
+st.components.v1.html("""
+    <script>
+        window.addEventListener('message', function(event) {
+            if (event.data.type === 'firebase_login') {
+                const url = new URL(window.location);
+                url.searchParams.set('auth', 'success');
+                url.searchParams.set('uid', event.data.uid);
+                url.searchParams.set('email', encodeURIComponent(event.data.email));
+                window.location = url;
+            }
+        });
+    </script>
+""", height=0)
 # ================= VOICE HELPERS =================
 def listen_for_wake_word_chunk():
     """Listen for a short audio chunk and check for wake word"""
