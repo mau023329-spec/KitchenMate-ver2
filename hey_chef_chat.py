@@ -446,7 +446,8 @@ if "user_preferences" not in st.session_state:
     st.session_state.user_preferences = {}
 if "gym_diet_chart" not in st.session_state:
     st.session_state.gym_diet_chart = None  # stores analyzed/edited chart summary
-
+if "theme" not in st.session_state:
+    st.session_state.theme = "light"
 # Listen for Firebase login from iframe
 st.components.v1.html("""
     <script>
@@ -1850,7 +1851,7 @@ with st.expander("📝 Customize Routine Items"):
         st.markdown("---")
     
     # ────────── SIGN OUT ──────────
-    if st.button("🚪 Sign Out", use_container_width=True, type="primary"):
+if st.button("🚪 Sign Out", use_container_width=True, type="primary"):
         # Clear all session state
         for key in list(st.session_state.keys()):
             del st.session_state[key]
@@ -1858,13 +1859,11 @@ with st.expander("📝 Customize Routine Items"):
         time.sleep(1)
         st.rerun()
     
-    st.markdown("---")
-    st.caption("Made by Manas")
+        st.markdown("---")
+        st.caption("Made by Manas")
 
     
     # ================= THEME TOGGLE (improved) =================
-if "theme" not in st.session_state:
-    st.session_state.theme = "light"
 
 def toggle_theme():
     st.session_state.theme = "dark" if st.session_state.theme == "light" else "light"
@@ -1874,8 +1873,8 @@ st.markdown(f"""
     <style>
         :root {{
             --bg-primary: {'#FFF8F0' if st.session_state.theme == 'light' else '#121212'};
-            --bg-secondary: {'#FFFFFF' if st.session_state.theme == 'light' else '#1E1E1E'};
-            --text-primary: {'#2C2C2C' if st.session_state.theme == 'light' else '#E0E0E0'};
+            --bg-secondary: {"#FFFFFF" if st.session_state.theme == 'light' else '#1E1E1E'};
+            --text-primary: {"#000000" if st.session_state.theme == 'light' else '#E0E0E0'};
             --accent-orange: #FF6B35;
             --accent-orange-light: #FFB07C;
             --accent-green: #8A9A5B;
