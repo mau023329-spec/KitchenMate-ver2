@@ -1551,164 +1551,37 @@ st.set_page_config(
 # Add this right after your st.set_page_config() in the MAIN APP section
 st.markdown("""
 <style>
-/* ═══════════════════════════════════════════════════════════════
-   HEY CHEF CHAT - WARM COOKING THEME (2026)
-   ═══════════════════════════════════════════════════════════════ */
+    /* Force chat input to bottom */
+    .stChatFloatingInputContainer {
+        position: fixed !important;
+        bottom: 0 !important;
+        left: 0 !important;
+        right: 0 !important;
+        background: var(--bg-secondary) !important;
+        padding: 16px 24px !important;
+        box-shadow: 0 -6px 20px rgba(0,0,0,0.12) !important;
+        border-top: 1px solid rgba(255,107,53,0.15) !important;
+        z-index: 999 !important;
+    }
 
-/* Root variables for easy theme switching */
-:root {
-    --bg-primary: #FFF8F0;        /* Cream background */
-    --bg-secondary: #FFFFFF;      /* White cards */
-    --accent-orange: #FF6B35;     /* Terracotta */
-    --accent-orange-light: #FFB07C;
-    --accent-green: #8A9A5B;      /* Sage green */
-    --text-primary: #2C2C2C;
-    --text-secondary: #6B6B6B;
-    --shadow: 0 2px 8px rgba(0,0,0,0.08);
-    --shadow-hover: 0 4px 16px rgba(0,0,0,0.12);
-}
+    /* Give main content enough bottom padding so last messages aren't hidden */
+    .main .block-container {
+        padding-bottom: 140px !important;   /* ← most important line */
+    }
 
-[data-theme="dark"] {
-    --bg-primary: #1A1A1A;
-    --bg-secondary: #2D2D2D;
-    --text-primary: #F0F0F0;
-    --text-secondary: #B0B0B0;
-    --shadow: 0 2px 8px rgba(0,0,0,0.3);
-}
+    /* Make input bar look nicer */
+    .stChatInput > div > div {
+        border-radius: 999px !important;
+        border: 2px solid var(--accent-orange-light) !important;
+        background: var(--bg-primary) !important;
+    }
 
-/* Main app container */
-.stApp {
-    background: linear-gradient(135deg, var(--bg-primary) 0%, #FFF5E8 100%);
-}
-
-/* Chat message containers */
-.stChatMessage {
-    background: var(--bg-secondary) !important;
-    border-radius: 16px !important;
-    padding: 16px 20px !important;
-    margin: 12px 0 !important;
-    box-shadow: var(--shadow) !important;
-    transition: all 0.2s ease;
-}
-
-.stChatMessage:hover {
-    box-shadow: var(--shadow-hover) !important;
-    transform: translateY(-2px);
-}
-
-/* User messages - align right with orange accent */
-.stChatMessage[data-testid*="user"] {
-    background: linear-gradient(135deg, var(--accent-orange-light), var(--accent-orange)) !important;
-    color: white !important;
-    margin-left: 20% !important;
-    border-bottom-right-radius: 4px !important;
-}
-
-/* Assistant messages - align left with cream bg */
-.stChatMessage[data-testid*="assistant"] {
-    margin-right: 20% !important;
-    border-bottom-left-radius: 4px !important;
-    border-left: 3px solid var(--accent-green);
-}
-
-/* Chat input - fixed at bottom with elevation */
-.stChatFloatingInputContainer {
-    position: fixed !important;
-    bottom: 0 !important;
-    left: 0 !important;
-    right: 0 !important;
-    background: var(--bg-secondary) !important;
-    padding: 16px 20px !important;
-    box-shadow: 0 -4px 20px rgba(0,0,0,0.1) !important;
-    border-top: 1px solid rgba(255,107,53,0.2) !important;
-    z-index: 1000 !important;
-}
-
-/* Chat input field styling */
-.stChatInputContainer > div {
-    border-radius: 24px !important;
-    border: 2px solid var(--accent-orange-light) !important;
-    background: var(--bg-primary) !important;
-    transition: all 0.3s ease;
-}
-
-.stChatInputContainer > div:focus-within {
-    border-color: var(--accent-orange) !important;
-    box-shadow: 0 0 0 3px rgba(255,107,53,0.1) !important;
-}
-
-/* Add bottom padding to main content to prevent overlap with fixed input */
-section[data-testid="stMain"] > div {
-    padding-bottom: 120px !important;
-}
-
-/* Avatar styling - circular with shadow */
-.stChatMessage img {
-    border-radius: 50% !important;
-    box-shadow: 0 2px 8px rgba(0,0,0,0.15) !important;
-    width: 40px !important;
-    height: 40px !important;
-}
-
-/* Code blocks in recipes */
-pre {
-    background: var(--bg-primary) !important;
-    border-left: 3px solid var(--accent-green) !important;
-    border-radius: 8px !important;
-    padding: 12px !important;
-}
-
-/* Buttons - warm cooking theme */
-.stButton > button {
-    background: linear-gradient(135deg, var(--accent-orange), #E85A2F) !important;
-    color: white !important;
-    border: none !important;
-    border-radius: 12px !important;
-    padding: 10px 24px !important;
-    font-weight: 600 !important;
-    transition: all 0.3s ease !important;
-    box-shadow: var(--shadow) !important;
-}
-
-.stButton > button:hover {
-    transform: translateY(-2px) !important;
-    box-shadow: var(--shadow-hover) !important;
-    background: linear-gradient(135deg, #E85A2F, var(--accent-orange)) !important;
-}
-
-/* Expanders for recipe sections */
-.streamlit-expanderHeader {
-    background: var(--bg-secondary) !important;
-    border-radius: 12px !important;
-    border-left: 4px solid var(--accent-green) !important;
-    padding: 12px 16px !important;
-    font-weight: 600 !important;
-    color: var(--text-primary) !important;
-}
-
-/* Hide Streamlit branding */
-#MainMenu, footer, header {visibility: hidden;}
-
-/* Scrollbar styling */
-::-webkit-scrollbar {
-    width: 8px;
-}
-
-::-webkit-scrollbar-track {
-    background: var(--bg-primary);
-}
-
-::-webkit-scrollbar-thumb {
-    background: var(--accent-orange-light);
-    border-radius: 4px;
-}
-
-::-webkit-scrollbar-thumb:hover {
-    background: var(--accent-orange);
-}
+    .stChatInput > div:focus-within {
+        border-color: var(--accent-orange) !important;
+        box-shadow: 0 0 0 4px rgba(255,107,53,0.12) !important;
+    }
 </style>
 """, unsafe_allow_html=True)
-
 # ────── EXPIRATION WARNING BANNER ──────
 expiring_items = []
 expired_items = []
@@ -1807,34 +1680,46 @@ tab1, tab2, tab3, tab4, tab5, tab6, tab_scan = st.tabs([
 with st.sidebar:
     st.header("⚙️ Settings")
     
-    # ═══ ADD THEME TOGGLE HERE ═══
-    # Initialize theme in session state
-    if "theme" not in st.session_state:
-        st.session_state.theme = "light"
-    
-    # Toggle function
-    def toggle_theme():
-        st.session_state.theme = "dark" if st.session_state.theme == "light" else "light"
-    
-    # Add data-theme attribute
-    st.markdown(f"""
-    <script>
-        document.documentElement.setAttribute('data-theme', '{st.session_state.theme}');
-    </script>
-    """, unsafe_allow_html=True)
-    
-    # Theme toggle button
-    col1, col2 = st.columns([5, 1])
-    with col1:
-        st.caption("🎨 Theme")
-    with col2:
-        icon = "🌙" if st.session_state.theme == "light" else "☀️"
-        if st.button(icon, key="theme_toggle", help="Toggle dark/light mode"):
-            toggle_theme()
-            st.rerun()
-    
-    st.markdown("---")
-    # ═══ END THEME TOGGLE ═══
+    # ================= THEME TOGGLE (improved) =================
+if "theme" not in st.session_state:
+    st.session_state.theme = "light"
+
+def toggle_theme():
+    st.session_state.theme = "dark" if st.session_state.theme == "light" else "light"
+    st.rerun()  # very important!
+
+st.markdown(f"""
+    <style>
+        :root {{
+            --bg-primary: {'#FFF8F0' if st.session_state.theme == 'light' else '#121212'};
+            --bg-secondary: {'#FFFFFF' if st.session_state.theme == 'light' else '#1E1E1E'};
+            --text-primary: {'#2C2C2C' if st.session_state.theme == 'light' else '#E0E0E0'};
+            --accent-orange: #FF6B35;
+            --accent-orange-light: #FFB07C;
+            --accent-green: #8A9A5B;
+        }}
+        .stApp {{
+            background-color: var(--bg-primary) !important;
+            color: var(--text-primary) !important;
+        }}
+        section[data-testid="stSidebar"] {{
+            background-color: var(--bg-secondary) !important;
+        }}
+        .stChatMessage {{
+            background-color: var(--bg-secondary) !important;
+            color: var(--text-primary) !important;
+        }}
+        /* Add more selectors you care about... */
+    </style>
+""", unsafe_allow_html=True)
+
+col1, col2 = st.columns([5,1])
+with col1:
+    st.caption("Theme")
+with col2:
+    icon = "☀️" if st.session_state.theme == "dark" else "🌙"
+    if st.button(icon, key="theme_toggle_btn"):
+        toggle_theme()
     # User Info
     if st.session_state.get("user_email") and st.session_state.user_email != "guest@kitchenmate.app":
         st.write(f"👤 Logged in as:")
@@ -2368,7 +2253,10 @@ if prompt:
         with st.chat_message("user"):
             st.markdown(prompt)
         with st.chat_message("assistant"):
-            cooking_phrases = [
+# ────────────────────────────────────────────────
+# LOADING MESSAGES (move this UP in the file)
+# ────────────────────────────────────────────────
+         cooking_phrases = [
     "Simmering your recipe… 🍲",
     "Chopping ingredients… 🔪",
     "Mixing flavors… 🥄",
