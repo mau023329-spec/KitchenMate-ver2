@@ -2415,44 +2415,90 @@ if st.session_state.get("is_authenticated", False) and st.session_state.get("use
     except Exception as e:
         # Silent fail (don't break app), but log for you
         print(f"Auto-save failed: {str(e)}")
-# Floating PWA Install Button (appears on mobile browsers)
+# Improved floating PWA install button
 st.markdown("""
     <script>
     let deferredPrompt;
     
     window.addEventListener('beforeinstallprompt', (e) => {
+        // Prevent default mini-infobar
         e.preventDefault();
+        // Store the event for later use
         deferredPrompt = e;
+        console.log('PWA install prompt ready');
         
-        // Create and show install button
-        const installButton = document.createElement('button');
-        installButton.textContent = '📱 Install App';
-        installButton.style.cssText = `
+        // Show floating button
+        const btn = document.createElement('button');
+        btn.innerHTML = '📲 Install App';
+        btn.style.cssText = `
             position: fixed;
             bottom: 20px;
             right: 20px;
-            padding: 12px 24px;
+            z-index: 9999;
+            padding: 12px 20px;
             background: #FF6B6B;
             color: white;
             border: none;
-            border-radius: 25px;
+            border-radius: 50px;
             font-weight: bold;
-            cursor: pointer;
-            z-index: 1000;
             box-shadow: 0 4px 12px rgba(0,0,0,0.3);
+            cursor: pointer;
         `;
         
-        installButton.addEventListener('click', async () => {
+        btn.onclick = () => {
             deferredPrompt.prompt();
-            const { outcome } = await deferredPrompt.userChoice;
-            deferredPrompt = null;
-            installButton.remove();
-        });
+            deferredPrompt.userChoice.then((choice) => {
+                if (choice.outcome === 'accepted') {
+                    console.log('Installed!');
+                }
+                deferredPrompt = null;
+                btn.remove();
+            });
+        };
         
-        document.body.appendChild(installButton);
+        document.body.appendChild(btn);
     });
     </script>
 """, unsafe_allow_html=True)
+# ────────────────────────────────────────────────
+#  Visible "Install App" Button for PWA
+# ────────────────────────────────────────────────
+
+st.markdown("---")
+
+st.subheader("📲 Make KitchenMate Your App!")
+
+st.info("""
+Want quick access like a real app?  
+Install it to your phone home screen — works offline too!
+""")
+
+# Big install button
+if st.button("📱 Install KitchenMate App", type="primary", use_container_width=True):
+    st.markdown("""
+        <script>
+        if (window.deferredPrompt) {
+            window.deferredPrompt.prompt();
+            window.deferredPrompt.userChoice.then((choiceResult) => {
+                if (choiceResult.outcome === 'accepted') {
+                    console.log('User accepted the install prompt');
+                } else {
+                    console.log('User dismissed the install prompt');
+                }
+                window.deferredPrompt = null;
+            });
+        } else {
+            alert("Install prompt not available. On mobile: tap browser menu → 'Add to Home Screen'");
+        }
+        </script>
+    """, unsafe_allow_html=True)
+    st.success("Install prompt triggered! If nothing happens, check your browser menu → 'Add to Home Screen'")
+
+# Fallback message for desktop users
+st.caption("""
+Desktop: This feature works best on mobile Chrome/Safari.  
+Mobile: Look for 'Install' in address bar or browser menu.
+""")
 
 # Footer
 st.markdown("---")
