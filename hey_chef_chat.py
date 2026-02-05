@@ -1,4 +1,5 @@
-# test redeploy
+import PyPDF2  # for PDF text extraction
+from io import BytesIO
 import streamlit as st
 from groq import Groq
 import re
@@ -237,6 +238,38 @@ if not st.session_state.is_authenticated:
 # Load user data on first login
 if st.session_state.is_authenticated and "data_loaded" not in st.session_state:
     load_user_data()
+    
+    # Automatic expiration countdown
+    today = datetime.now().date()
+    
+    # Initialize last_opened if missing
+    if "last_opened_date" not in st.session_state:
+        st.session_state.last_opened_date = today
+    
+    # Calculate days passed since last open
+    days_passed = (today - st.session_state.last_opened_date).days
+    
+    if days_passed > 0:
+        updated = False
+        for item, days_left in list(st.session_state.inventory_expiry.items()):
+            if isinstance(days_left, (int, float)):
+                new_days = days_left - days_passed
+                st.session_state.inventory_expiry[item] = max(-30, new_days)  # don't go below -30
+                updated = True
+        
+        if updated:
+            # Optional: save updated expiry to Firestore
+            if not st.session_state.user_email.startswith("guest"):
+                try:
+                    db.collection("users").document(st.session_state.user_id).set({
+                        "inventory_expiry": dict(st.session_state.inventory_expiry)
+                    }, merge=True)
+                except:
+                    pass  # silent fail
+        
+        # Update last opened date
+        st.session_state.last_opened_date = today
+    
     st.session_state.data_loaded = True
 
 # Show onboarding if needed
@@ -346,7 +379,8 @@ if "show_onboarding" not in st.session_state:
     st.session_state.show_onboarding = False
 if "user_preferences" not in st.session_state:
     st.session_state.user_preferences = {}
-
+if "gym_diet_chart" not in st.session_state:
+    st.session_state.gym_diet_chart = None  # stores analyzed/edited chart summary
 
 # Listen for Firebase login from iframe
 st.components.v1.html("""
@@ -782,6 +816,130 @@ def scale_quantity(qty_str, servings=1):
         return f"{round(num * servings, 1)}{rest}"
     except:
         return qty_str
+def generate_weekly_plan_from_chart(chart_summary):
+    with st.spinner("Creating your personalized 7-day plan..."):
+        plan_prompt = f"""
+        You are an expert Indian meal planner for fitness goals.
+        
+        User's gym diet chart summary:
+        {chart_summary}
+        
+        User's preferences:
+        - Allergies: {st.session_state.get('allergies', 'None')}
+        - Diet mode: {'Jain' if st.session_state.get('jain_mode') else 'Normal'}
+        - Pure Veg: {'Yes' if st.session_state.get('pure_veg_mode') else 'No'}
+        
+        Generate a realistic 7-day Indian meal plan:
+        - Breakfast, Mid-morning snack, Lunch, Evening snack, Dinner
+        - Match protein/calorie targets from chart
+        - Use simple home ingredients
+        - Suggest recipes or simple meals
+        
+        Format:
+        Day 1:
+        - Breakfast: [meal] (~X cal, Xg protein)
+        - ...
+        
+        At the end, list missing ingredients not in inventory.
+        """
+        
+        try:
+            response = client.chat.completions.create(
+                messages=[{"role": "user", "content": plan_prompt}],
+                model="llama-3.3-70b-versatile",
+                temperature=0.6,
+                max_tokens=1500
+            )
+            plan_text = response.choices[0].message.content.strip()
+            
+            st.markdown("### Your 7-Day Gym Plan")
+            st.markdown(plan_text)
+            
+            # Extract missing items (simple regex - improve later)
+            missing_match = re.search(r"Missing ingredients:(.*)", plan_text, re.DOTALL | re.IGNORECASE)
+            if missing_match:
+                missing_items = [item.strip() for item in missing_match.group(1).split("\n") if item.strip()]
+                for item in missing_items:
+                    st.session_state.grocery_list.add(item.lower())
+                st.success(f"Added {len(missing_items)} missing items to grocery list!")
+            
+            # Save plan to meal planner (simplified)
+            today = datetime.now().date()
+            for i in range(7):
+                day_key = (today + timedelta(days=i)).strftime("%Y-%m-%d")
+                if day_key not in st.session_state.meal_plan:
+                    st.session_state.meal_plan[day_key] = {}
+                st.session_state.meal_plan[day_key]["Gym Plan"] = "Generated from chart"
+            
+            st.success("Plan added to Meal Planner tab!")
+            
+        except Exception as e:
+            st.error(f"Plan generation failed: {str(e)}")
+def add_items_from_receipt(receipt_text):
+    lines = [line.strip() for line in receipt_text.split("\n") if line.strip() and "|" in line]
+    added_count = 0
+    
+    for line in lines:
+        try:
+            parts = [p.strip() for p in line.split("|")]
+            if len(parts) < 3:
+                continue
+            name = parts[0].lower()
+            qty_str = parts[1]
+            unit = parts[2].lower()
+            price = float(parts[3].replace("₹", "").strip()) if len(parts) > 3 else 0
+            
+            # Convert to grams/ml/pcs
+            qty_num = float(re.search(r'\d*\.?\d+', qty_str).group()) if re.search(r'\d', qty_str) else 500
+            if "kg" in unit:
+                qty_num *= 1000
+            elif "l" in unit:
+                qty_num *= 1000
+            
+            key = name
+            st.session_state.inventory[key] = int(qty_num)
+            if price > 0:
+                st.session_state.inventory_prices[key] = price / (qty_num / 100)  # per 100g/ml
+            added_count += 1
+            
+        except:
+            continue
+    
+    if added_count > 0:
+        st.success(f"Added {added_count} items to inventory!")
+        st.rerun()
+    else:
+        st.warning("No valid items found.")
+
+def add_missing_items_from_receipt(receipt_text):
+    lines = [line.strip() for line in receipt_text.split("\n") if line.strip() and "|" in line]
+    added_count = 0
+    
+    for line in lines:
+        try:
+            parts = [p.strip() for p in line.split("|")]
+            if len(parts) < 2:
+                continue
+            name = parts[0].lower()
+            
+            # Skip if already in inventory
+            if name in st.session_state.inventory:
+                continue
+                
+            qty_str = parts[1]
+            qty_num = float(re.search(r'\d*\.?\d+', qty_str).group()) if re.search(r'\d', qty_str) else 500
+            st.session_state.inventory[name] = int(qty_num)
+            added_count += 1
+            
+        except:
+            continue
+    
+    if added_count > 0:
+        st.success(f"Added {added_count} missing items!")
+        st.rerun()
+    else:
+        st.info("All items already in inventory!")
+
 # ================= INGREDIENT ACCEPT PATTERNS =================
 
 # Comprehensive food ingredient categories
@@ -1273,7 +1431,6 @@ def extract_steps(text):
     
     return steps[:15]
 
-# ================= SYSTEM PROMPT =================
 def get_system_prompt():
     base = """You are KitchenMate - a chill, friendly Indian cooking assistant.
 Be casual and helpful. Use simple language.
@@ -1281,20 +1438,31 @@ When giving recipes:
 - List ingredients with quantities
 - Give clear, simple steps
 - End with something friendly"""
-   
+
     if st.session_state.language_mode == "English":
         base += "\nSpeak ONLY in pure English. No Hindi words at all."
     else:
-        base += "\nUse casual Hindi-English mix."
-   
+        base += "\nUse casual Hindi."
+
     if st.session_state.allergies:
         base += f"\nUser allergies: {st.session_state.allergies}. Avoid these completely!"
-   
+
     low_items = [k for k, v in st.session_state.inventory.items() if v < 200]
     if low_items:
         base += f"\nUser has LOW stock of: {', '.join(low_items)}. Prefer recipes using little of these or suggest substitutes."
+
     if st.session_state.jain_mode:
         base += "\nUser follows JAIN diet. NEVER suggest: onion, garlic, ginger, potato, carrot, radish, beetroot, or any root vegetables. Use hing (asafoetida) for flavor instead."
+
+    # ───── NEW: Prioritize expiring items ─────
+    expiring_soon = []
+    for item, days in st.session_state.inventory_expiry.items():
+        if isinstance(days, (int, float)) and 0 < days <= 3:
+            expiring_soon.append(f"{item} ({days} days left)")
+    
+    if expiring_soon:
+        base += f"\nUser has items expiring very soon: {', '.join(expiring_soon)}. ALWAYS prioritize using these items first in recipes! Suggest them prominently and use substitutes only if absolutely necessary."
+
     return base
 
 def get_nutrition_prompt(servings):
@@ -1315,7 +1483,38 @@ st.set_page_config(
     layout="wide",
     initial_sidebar_state="expanded"
 )
+# ────── EXPIRATION WARNING BANNER ──────
+expiring_items = []
+expired_items = []
 
+for item, days in st.session_state.inventory_expiry.items():
+    if isinstance(days, (int, float)):
+        if days <= 0:
+            expired_items.append(f"{item} (expired {abs(days)} days ago)")
+        elif days <= 3:
+            expiring_items.append(f"{item} ({days} days left)")
+
+if expired_items or expiring_items:
+    if expired_items:
+        banner_text = f"⚠️ Expired items: {', '.join(expired_items)}"
+        banner_color = "#ffcccc"  # light red
+    else:
+        banner_text = f"⏰ Expiring soon: {', '.join(expiring_items)}"
+        banner_color = "#fff3cd"  # light orange-yellow
+    
+    st.markdown(f"""
+        <div style="
+            background-color: {banner_color};
+            padding: 12px;
+            border-radius: 8px;
+            margin-bottom: 16px;
+            text-align: center;
+            font-weight: bold;
+            color: #333;
+        ">
+            {banner_text} — Use them soon or remove from inventory!
+        </div>
+    """, unsafe_allow_html=True)
 # Force custom PWA manifest to override Streamlit's default
 st.markdown("""
     <link rel="manifest" href="/static/manifest.json">
@@ -1388,7 +1587,7 @@ with st.sidebar:
     st.subheader("🎛️ Diet Preferences")
     
     # Jain Mode
-    new_jain_mode = st.toggle("🙏 Jain Mode (No root vegetables)", value=st.session_state.jain_mode)
+    new_jain_mode = st.toggle(" Jain Mode (No root vegetables)", value=st.session_state.jain_mode)
     if new_jain_mode != st.session_state.jain_mode:
         st.session_state.jain_mode = new_jain_mode
         st.rerun()
@@ -1522,7 +1721,7 @@ with st.sidebar:
         st.rerun()
     
     st.markdown("---")
-    st.caption("Made with by Manas")
+    st.caption("Made by Manas")
 # ────────────── CHAT TAB ──────────────
 with tab1:
     st.subheader("💬 Chat with KitchenMate")
@@ -1605,14 +1804,147 @@ for msg in st.session_state.messages:
 video_id = None
     
     # Check for YouTube URL in text input first
-text_prompt = st.chat_input("Kya banayein aaj? Recipe, tip, YouTube link, kuch bhi...")
+# Chat input with attachment button
+col_input, col_attach = st.columns([9, 1])
+
+with col_input:
+    prompt = st.chat_input("Ask anything... (or upload gym diet chart)")
+
+with col_attach:
+    uploaded_file = st.file_uploader(
+        label="",
+        type=["jpg", "jpeg", "png", "pdf"],
+        accept_multiple_files=False,
+        label_visibility="collapsed",
+        key="chat_file_uploader"
+    )
+
+# Chat input with attachment button
+col_input, col_attach = st.columns([9, 1])
+
+with col_input:
+    prompt = st.chat_input("Ask anything... (or upload gym diet chart)")
+
+with col_attach:
+    uploaded_file = st.file_uploader(
+        label="",
+        type=["jpg", "jpeg", "png", "pdf"],
+        accept_multiple_files=False,
+        label_visibility="collapsed",
+        key="chat_file_uploader"
+    )
+
+# Handle uploaded file (gym diet chart or receipt)
+if uploaded_file is not None:
+    # Add user message with file name
+    st.session_state.messages.append({
+        "role": "user",
+        "content": f"Uploaded: **{uploaded_file.name}**"
+    })
     
-if text_prompt:
-        video_id = detect_youtube_url(text_prompt)
-        if not video_id:
-            prompt = text_prompt
+    with st.chat_message("user"):
+        st.markdown(f"Uploaded: **{uploaded_file.name}**")
+        if uploaded_file.type.startswith("image/"):
+            st.image(uploaded_file)
+        else:
+            st.write("PDF uploaded")
     
+    with st.chat_message("assistant"):
+        with st.spinner("Analyzing file... 📊"):
+            chart_text = ""
+            
+            # Extract text from file
+            if uploaded_file.type == "application/pdf":
+                try:
+                    pdf_reader = PyPDF2.PdfReader(BytesIO(uploaded_file.read()))
+                    for page in pdf_reader.pages:
+                        chart_text += page.extract_text() + "\n"
+                except Exception as e:
+                    chart_text = f"Error reading PDF: {str(e)}"
+            else:
+                # For images - placeholder (add OCR later if needed)
+                chart_text = "Image uploaded - text extraction pending OCR implementation"
+            
+            # Decide if it's a diet chart or receipt based on filename
+            is_receipt = any(word in uploaded_file.name.lower() for word in ["receipt", "bill", "grocery", "kiranastore"])
+            
+            if is_receipt:
+                # Receipt analysis
+                analysis_prompt = f"""
+                You are a smart grocery receipt scanner.
+                Extract ALL food items, quantities and prices from this receipt text:
+                {chart_text[:4000]}
+                
+                Output format (only this, no extra text):
+                Item name | Quantity | Unit | Price (₹)
+                Paneer | 500 | g | 180
+                Tomatoes | 2 | kg | 80
+                ...
+                
+                Skip non-food items (soap, bags, etc.).
+                Use standard units (g, kg, ml, L, pcs).
+                """
+            else:
+                # Diet chart analysis (default)
+                analysis_prompt = f"""
+                You are a nutrition & fitness expert. Analyze this gym diet chart text:
+                {chart_text[:4000]}
+                
+                Extract and summarize in this structured format:
+                Daily Calories: X kcal
+                Protein target: X g
+                Carbs: X g / Low/Medium/High
+                Fats: X g
+                Meals per day: X
+                Key rules / foods to avoid: ...
+                Special notes / restrictions: ...
+                
+                Return ONLY the structured summary - no extra text.
+                """
+            
+            try:
+                response = client.chat.completions.create(
+                    messages=[{"role": "user", "content": analysis_prompt}],
+                    model="llama-3.3-70b-versatile",
+                    temperature=0.4,
+                    max_tokens=500
+                )
+                summary = response.choices[0].message.content.strip()
+                
+                # Editable summary
+                st.markdown("**AI Analysis (edit if needed):**")
+                edited_summary = st.text_area(
+                    label="",
+                    value=summary,
+                    height=180,
+                    key=f"edit_{uploaded_file.name}_{int(time.time())}"  # unique key
+                )
+                
+                col1, col2 = st.columns(2)
+                
+                if col1.button("💾 Save / Add to Inventory"):
+                    if is_receipt:
+                        add_items_from_receipt(edited_summary)
+                    else:
+                        st.session_state.gym_diet_chart = edited_summary
+                        if not st.session_state.user_email.startswith("guest"):
+                            db.collection("users").document(st.session_state.user_id).set({
+                                "gym_diet_chart": edited_summary,
+                                "chart_updated": datetime.now().isoformat()
+                            }, merge=True)
+                        st.success("Saved!")
+                
+                if col2.button("📅 Generate Weekly Plan" if not is_receipt else "➕ Add Missing Items"):
+                    if is_receipt:
+                        add_missing_items_from_receipt(edited_summary)
+                    else:
+                        generate_weekly_plan_from_chart(edited_summary)
+                        
+            except Exception as e:
+                st.error(f"Analysis failed: {str(e)}")
+                st.info("Try uploading again or paste text manually.") 
     # Manual voice recording (if not using continuous mode)
+
 if st.session_state.voice_enabled and not st.session_state.listening_active and not video_id and not prompt:
         st.markdown("#### Or Record Manually:")
         col_v1, col_v2 = st.columns([4, 1])
