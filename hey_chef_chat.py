@@ -23,7 +23,72 @@ import firebase_admin
 from firebase_admin import credentials, firestore
 import uuid
 from google_auth_oauthlib.flow import Flow
+# ═══════════════════════════════════════════════════════════════
+# HELPER FUNCTIONS - UI COMPONENTS
+# ═══════════════════════════════════════════════════════════════
 
+def display_message(role, content):
+    """
+    Displays chat message with avatars and copy button.
+    
+    Args:
+        role: "user" or "assistant"
+        content: Message text (supports markdown)
+    """
+    # Avatar URLs
+    avatars = {
+        "user": "https://api.dicebear.com/7.x/avataaars/svg?seed=user",
+        "assistant": "https://api.dicebear.com/7.x/bottts/svg?seed=chef&backgroundColor=FF6B35"
+    }
+    
+    with st.chat_message(role, avatar=avatars.get(role)):
+        st.markdown(content)
+        
+        # Add copy button for assistant messages
+        if role == "assistant":
+            if st.button("📋 Copy", key=f"copy_{hash(content)}", help="Copy to clipboard"):
+                st.code(content, language=None)
+                st.toast("Copied! 🎉", icon="✅")
+
+def format_recipe(recipe_text):
+    """
+    Formats recipe with expandable sections and copy buttons.
+    """
+    # Ingredients expander
+    with st.expander("🥘 Ingredients", expanded=True):
+        ingredients = [line for line in recipe_text.split("\n") if line.strip().startswith("-") or line.strip().startswith("•")]
+        if ingredients:
+            for ing in ingredients:
+                st.markdown(ing)
+            if st.button("📋 Copy Ingredients", key="copy_ing"):
+                st.code("\n".join(ingredients), language=None)
+                st.toast("Ingredients copied!", icon="🥘")
+        else:
+            st.info("No ingredients detected in standard format")
+    
+    # Steps expander
+    with st.expander("👨‍🍳 Cooking Steps", expanded=True):
+        steps = [line for line in recipe_text.split("\n") if line.strip() and (line.strip()[0].isdigit() or line.strip().startswith("Step"))]
+        if steps:
+            for step in steps:
+                st.markdown(step)
+            if st.button("📋 Copy Steps", key="copy_steps"):
+                st.code("\n".join(steps), language=None)
+                st.toast("Steps copied!", icon="👨‍🍳")
+        else:
+            st.info("No steps detected in standard format")
+    
+    # Full recipe copy
+    col1, col2, col3 = st.columns([1, 2, 1])
+    with col2:
+        if st.button("📄 Copy Full Recipe", use_container_width=True, type="primary"):
+            st.code(recipe_text, language=None)
+            st.balloons()
+            st.toast("Full recipe copied!", icon="📄")
+
+# ═══════════════════════════════════════════════════════════════
+# FIREBASE INITIALIZATION (safe for Streamlit reruns)
+# ═══════════════════════════════════════════════════════════════
 # ================= FIREBASE INITIALIZATION (safe for Streamlit reruns) =================
 
 APP_NAME = "kitchenmate-default"
@@ -1483,6 +1548,167 @@ st.set_page_config(
     layout="wide",
     initial_sidebar_state="expanded"
 )
+# Add this right after your st.set_page_config() in the MAIN APP section
+st.markdown("""
+<style>
+/* ═══════════════════════════════════════════════════════════════
+   HEY CHEF CHAT - WARM COOKING THEME (2026)
+   ═══════════════════════════════════════════════════════════════ */
+
+/* Root variables for easy theme switching */
+:root {
+    --bg-primary: #FFF8F0;        /* Cream background */
+    --bg-secondary: #FFFFFF;      /* White cards */
+    --accent-orange: #FF6B35;     /* Terracotta */
+    --accent-orange-light: #FFB07C;
+    --accent-green: #8A9A5B;      /* Sage green */
+    --text-primary: #2C2C2C;
+    --text-secondary: #6B6B6B;
+    --shadow: 0 2px 8px rgba(0,0,0,0.08);
+    --shadow-hover: 0 4px 16px rgba(0,0,0,0.12);
+}
+
+[data-theme="dark"] {
+    --bg-primary: #1A1A1A;
+    --bg-secondary: #2D2D2D;
+    --text-primary: #F0F0F0;
+    --text-secondary: #B0B0B0;
+    --shadow: 0 2px 8px rgba(0,0,0,0.3);
+}
+
+/* Main app container */
+.stApp {
+    background: linear-gradient(135deg, var(--bg-primary) 0%, #FFF5E8 100%);
+}
+
+/* Chat message containers */
+.stChatMessage {
+    background: var(--bg-secondary) !important;
+    border-radius: 16px !important;
+    padding: 16px 20px !important;
+    margin: 12px 0 !important;
+    box-shadow: var(--shadow) !important;
+    transition: all 0.2s ease;
+}
+
+.stChatMessage:hover {
+    box-shadow: var(--shadow-hover) !important;
+    transform: translateY(-2px);
+}
+
+/* User messages - align right with orange accent */
+.stChatMessage[data-testid*="user"] {
+    background: linear-gradient(135deg, var(--accent-orange-light), var(--accent-orange)) !important;
+    color: white !important;
+    margin-left: 20% !important;
+    border-bottom-right-radius: 4px !important;
+}
+
+/* Assistant messages - align left with cream bg */
+.stChatMessage[data-testid*="assistant"] {
+    margin-right: 20% !important;
+    border-bottom-left-radius: 4px !important;
+    border-left: 3px solid var(--accent-green);
+}
+
+/* Chat input - fixed at bottom with elevation */
+.stChatFloatingInputContainer {
+    position: fixed !important;
+    bottom: 0 !important;
+    left: 0 !important;
+    right: 0 !important;
+    background: var(--bg-secondary) !important;
+    padding: 16px 20px !important;
+    box-shadow: 0 -4px 20px rgba(0,0,0,0.1) !important;
+    border-top: 1px solid rgba(255,107,53,0.2) !important;
+    z-index: 1000 !important;
+}
+
+/* Chat input field styling */
+.stChatInputContainer > div {
+    border-radius: 24px !important;
+    border: 2px solid var(--accent-orange-light) !important;
+    background: var(--bg-primary) !important;
+    transition: all 0.3s ease;
+}
+
+.stChatInputContainer > div:focus-within {
+    border-color: var(--accent-orange) !important;
+    box-shadow: 0 0 0 3px rgba(255,107,53,0.1) !important;
+}
+
+/* Add bottom padding to main content to prevent overlap with fixed input */
+section[data-testid="stMain"] > div {
+    padding-bottom: 120px !important;
+}
+
+/* Avatar styling - circular with shadow */
+.stChatMessage img {
+    border-radius: 50% !important;
+    box-shadow: 0 2px 8px rgba(0,0,0,0.15) !important;
+    width: 40px !important;
+    height: 40px !important;
+}
+
+/* Code blocks in recipes */
+pre {
+    background: var(--bg-primary) !important;
+    border-left: 3px solid var(--accent-green) !important;
+    border-radius: 8px !important;
+    padding: 12px !important;
+}
+
+/* Buttons - warm cooking theme */
+.stButton > button {
+    background: linear-gradient(135deg, var(--accent-orange), #E85A2F) !important;
+    color: white !important;
+    border: none !important;
+    border-radius: 12px !important;
+    padding: 10px 24px !important;
+    font-weight: 600 !important;
+    transition: all 0.3s ease !important;
+    box-shadow: var(--shadow) !important;
+}
+
+.stButton > button:hover {
+    transform: translateY(-2px) !important;
+    box-shadow: var(--shadow-hover) !important;
+    background: linear-gradient(135deg, #E85A2F, var(--accent-orange)) !important;
+}
+
+/* Expanders for recipe sections */
+.streamlit-expanderHeader {
+    background: var(--bg-secondary) !important;
+    border-radius: 12px !important;
+    border-left: 4px solid var(--accent-green) !important;
+    padding: 12px 16px !important;
+    font-weight: 600 !important;
+    color: var(--text-primary) !important;
+}
+
+/* Hide Streamlit branding */
+#MainMenu, footer, header {visibility: hidden;}
+
+/* Scrollbar styling */
+::-webkit-scrollbar {
+    width: 8px;
+}
+
+::-webkit-scrollbar-track {
+    background: var(--bg-primary);
+}
+
+::-webkit-scrollbar-thumb {
+    background: var(--accent-orange-light);
+    border-radius: 4px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+    background: var(--accent-orange);
+}
+</style>
+""", unsafe_allow_html=True)
+
 # ────── EXPIRATION WARNING BANNER ──────
 expiring_items = []
 expired_items = []
@@ -1525,7 +1751,48 @@ st.markdown("""
     <link rel="apple-touch-icon" href="/static/icon-192.png">
 """, unsafe_allow_html=True)
 
-st.title("KitchenMate - Smart AI Assistant")
+# ═══ ADD HEADER FUNCTION HERE ═══
+def render_header():
+    """Renders attractive app header with branding"""
+    st.markdown("""
+    <div style="
+        background: linear-gradient(135deg, #FF6B35 0%, #FFB07C 100%);
+        padding: 24px 32px;
+        border-radius: 0 0 24px 24px;
+        box-shadow: 0 4px 20px rgba(255,107,53,0.2);
+        margin: -1rem -1rem 2rem -1rem;
+        text-align: center;
+    ">
+        <h1 style="
+            color: white;
+            font-size: 2.5rem;
+            margin: 0;
+            font-weight: 700;
+            text-shadow: 0 2px 4px rgba(0,0,0,0.1);
+        ">
+            KitchenMate 🍳
+        </h1>
+        <p style="
+            color: rgba(255,255,255,0.95);
+            font-size: 1.1rem;
+            margin: 8px 0 0 0;
+            font-weight: 400;
+        ">
+            Your AI-powered cooking companion
+        </p>
+    </div>
+    """, unsafe_allow_html=True)
+
+# Call header
+render_header()
+# ═══ END HEADER ═══
+
+# New chat button (optional - add before tabs)
+col1, col2, col3 = st.columns([1, 2, 1])
+with col2:
+    if st.button("🆕 Start Fresh Chat", use_container_width=True):
+        st.session_state.messages = []
+        st.rerun()
 
 tab1, tab2, tab3, tab4, tab5, tab6, tab_scan = st.tabs([
     "💬 Chat", "📅 Meal Planner", "🛒 Grocery & Inventory",
@@ -1540,6 +1807,34 @@ tab1, tab2, tab3, tab4, tab5, tab6, tab_scan = st.tabs([
 with st.sidebar:
     st.header("⚙️ Settings")
     
+    # ═══ ADD THEME TOGGLE HERE ═══
+    # Initialize theme in session state
+    if "theme" not in st.session_state:
+        st.session_state.theme = "light"
+    
+    # Toggle function
+    def toggle_theme():
+        st.session_state.theme = "dark" if st.session_state.theme == "light" else "light"
+    
+    # Add data-theme attribute
+    st.markdown(f"""
+    <script>
+        document.documentElement.setAttribute('data-theme', '{st.session_state.theme}');
+    </script>
+    """, unsafe_allow_html=True)
+    
+    # Theme toggle button
+    col1, col2 = st.columns([5, 1])
+    with col1:
+        st.caption("🎨 Theme")
+    with col2:
+        icon = "🌙" if st.session_state.theme == "light" else "☀️"
+        if st.button(icon, key="theme_toggle", help="Toggle dark/light mode"):
+            toggle_theme()
+            st.rerun()
+    
+    st.markdown("---")
+    # ═══ END THEME TOGGLE ═══
     # User Info
     if st.session_state.get("user_email") and st.session_state.user_email != "guest@kitchenmate.app":
         st.write(f"👤 Logged in as:")
@@ -1803,16 +2098,31 @@ for msg in st.session_state.messages:
     # Voice Input Section
 video_id = None
 
-# Show chat history
+# Show chat history with custom styling
 for msg in st.session_state.messages:
-    with st.chat_message(msg["role"]):
-        st.markdown(msg["content"])
-           
+    display_message(msg["role"], msg["content"])
+
 # Chat input with attachment button
 col_input, col_attach = st.columns([9, 1])
 
 with col_input:
-    prompt = st.chat_input("Ask anything... (or upload gym diet chart)")
+    # Enhanced chat input with better placeholder
+    prompt = st.chat_input(
+        placeholder="🔍 Ask me anything... recipes, substitutes, cooking tips, meal ideas!",
+        key="main_chat_input"
+    )
+
+# Add hint text above input (optional)
+st.markdown("""
+<div style="
+    text-align: center;
+    color: #6B6B6B;
+    font-size: 0.85rem;
+    margin: 16px 0;
+">
+    💡 Try: "Quick dinner with chicken" • "Low-carb breakfast" • "Use expiring tomatoes"
+</div>
+""", unsafe_allow_html=True)
 
 with col_attach:
     uploaded_file = st.file_uploader(
@@ -2058,7 +2368,16 @@ if prompt:
         with st.chat_message("user"):
             st.markdown(prompt)
         with st.chat_message("assistant"):
-            with st.spinner("Soch raha hoon..."):
+            cooking_phrases = [
+    "Simmering your recipe… 🍲",
+    "Chopping ingredients… 🔪",
+    "Mixing flavors… 🥄",
+    "Heating the pan… 🍳",
+    "Tasting for perfection… 👨‍🍳"
+]
+loader_text = random.choice(cooking_phrases)
+
+with st.spinner(loader_text):
                 try:
                     stream = client.chat.completions.create(
                         messages=[{"role": "system", "content": get_system_prompt()}, *st.session_state.messages],
@@ -2098,7 +2417,16 @@ if st.button("😴 Feeling Lazy? Suggest from Inventory"):
         with st.chat_message("user"):
             st.markdown(lazy_prompt)
         with st.chat_message("assistant"):
-            with st.spinner("Soch raha hoon..."):
+            cooking_phrases = [
+    "Simmering your recipe… 🍲",
+    "Chopping ingredients… 🔪",
+    "Mixing flavors… 🥄",
+    "Heating the pan… 🍳",
+    "Tasting for perfection… 👨‍🍳"
+]
+loader_text = random.choice(cooking_phrases)
+
+with st.spinner(loader_text):
                 try:
                     stream = client.chat.completions.create(
                         messages=[{"role": "system", "content": get_system_prompt()}, *st.session_state.messages],
@@ -2134,31 +2462,38 @@ if st.button("😴 Feeling Lazy? Suggest from Inventory"):
                    
    
 if st.session_state.messages and st.session_state.messages[-1]["role"] == "assistant":
-        col1, col2, col3, col4 = st.columns([2,2,2,2])
-        with col1:
-            if st.button("🍳 Start Cooking"):
-                st.session_state.show_cooking_check = True
-                st.session_state.show_nutrition = False
-                st.session_state.show_substitutes = False
-                st.session_state.ingredients_shown = False
-                st.rerun()
-        with col2:
-            if st.button("🥗 Calculate Nutrition"):
-                st.session_state.show_nutrition = True
-                st.session_state.show_cooking_check = False
-                st.session_state.show_substitutes = False
-                st.rerun()
-        with col3:
-            if st.button("❤️ Favourite"):
-                recipe_name = f"Recipe {len(st.session_state.favourite_recipes) + 1}"
-                st.session_state.favourite_recipes[recipe_name] = st.session_state.last_recipe
-                st.success(f"Added to Favourites: {recipe_name}")
-        with col4:
-            if st.button("🔄 Substitutes"):
-                st.session_state.show_substitutes = True
-                st.session_state.show_cooking_check = False
-                st.session_state.show_nutrition = False
-                st.rerun()
+    col1, col2, col3, col4 = st.columns([2,2,2,2])
+    with col1:
+        if st.button("🍳 Start Cooking"):
+            st.session_state.show_cooking_check = True
+            st.session_state.show_nutrition = False
+            st.session_state.show_substitutes = False
+            st.session_state.ingredients_shown = False
+            st.rerun()
+    with col2:
+        if st.button("🥗 Calculate Nutrition"):
+            st.session_state.show_nutrition = True
+            st.session_state.show_cooking_check = False
+            st.session_state.show_substitutes = False
+            st.rerun()
+    with col3:
+        if st.button("❤️ Favourite"):
+            recipe_name = f"Recipe {len(st.session_state.favourite_recipes) + 1}"
+            st.session_state.favourite_recipes[recipe_name] = st.session_state.last_recipe
+            st.success(f"Added to Favourites: {recipe_name}")
+    with col4:
+        if st.button("🔄 Substitutes"):
+            st.session_state.show_substitutes = True
+            st.session_state.show_cooking_check = False
+            st.session_state.show_nutrition = False
+            st.rerun()
+    
+    # ═══ ADD RECIPE FORMATTER HERE ═══
+    # Format last recipe nicely
+    if st.session_state.last_recipe:
+        st.markdown("---")
+        format_recipe(st.session_state.last_recipe)
+    # ═══ END RECIPE FORMATTER ═══
    
 if st.session_state.show_cooking_check and not st.session_state.cooking_mode:
         st.markdown("---")
