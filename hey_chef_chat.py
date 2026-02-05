@@ -446,8 +446,7 @@ if "user_preferences" not in st.session_state:
     st.session_state.user_preferences = {}
 if "gym_diet_chart" not in st.session_state:
     st.session_state.gym_diet_chart = None  # stores analyzed/edited chart summary
-if "theme" not in st.session_state:
-    st.session_state.theme = "light"
+
 # Listen for Firebase login from iframe
 st.components.v1.html("""
     <script>
@@ -1679,16 +1678,6 @@ def toggle_theme():
 
 with st.sidebar:
     st.header("⚙️ Settings")
-
-    # ──── THEME TOGGLE (first item) ────
-    col1, col2 = st.columns([5, 1])
-    with col1:
-        st.caption("Theme")
-    with col2:
-        icon = "☀️" if st.session_state.theme == "dark" else "🌙"
-        if st.button(icon, key="theme_toggle_btn"):
-            toggle_theme()
-
     # ──── USER INFO ────
     if st.session_state.get("user_email") and st.session_state.user_email != "guest@kitchenmate.app":
         st.write("👤 Logged in as:")
@@ -1883,32 +1872,6 @@ with st.sidebar:
 
     st.markdown("---")
     st.caption("Made by Manas")
-
-# ──── DARK/LIGHT MODE CSS (place this OUTSIDE the sidebar, preferably after set_page_config) ────
-st.markdown(f"""
-    <style>
-        :root {{
-            --bg-primary: {'#FFF8F0' if st.session_state.theme == 'light' else '#121212'};
-            --bg-secondary: {'#FFFFFF' if st.session_state.theme == 'light' else '#1E1E1E'};
-            --text-primary: {"#000000" if st.session_state.theme == 'light' else "#000000"};
-            --accent-orange: #FF6B35;
-            --accent-orange-light: #FFB07C;
-            --accent-green: #8A9A5B;
-        }}
-        .stApp {{
-            background-color: var(--bg-primary) !important;
-            color: var(--text-primary) !important;
-        }}
-        section[data-testid="stSidebar"] {{
-            background-color: var(--bg-secondary) !important;
-        }}
-        .stChatMessage {{
-            background-color: var(--bg-secondary) !important;
-            color: var(--text-primary) !important;
-        }}
-        /* You can keep adding more selectors here */
-    </style>
-""", unsafe_allow_html=True)
     
 
 # Call header
