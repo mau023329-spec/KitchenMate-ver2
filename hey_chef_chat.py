@@ -1316,13 +1316,14 @@ st.set_page_config(
     initial_sidebar_state="expanded"
 )
 
-# PWA manifest & meta tags (required for installability)
+# Force custom PWA manifest to override Streamlit's default
 st.markdown("""
     <link rel="manifest" href="/static/manifest.json">
     <meta name="theme-color" content="#FF6B6B">
     <meta name="apple-mobile-web-app-capable" content="yes">
-    <meta name="apple-mobile-web-app-status-bar-style" content="black">
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
     <meta name="apple-mobile-web-app-title" content="KitchenMate">
+    <link rel="apple-touch-icon" href="/static/icon-192.png">
 """, unsafe_allow_html=True)
 
 st.title("KitchenMate - Smart AI Assistant")
