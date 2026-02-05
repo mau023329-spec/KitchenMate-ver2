@@ -1890,7 +1890,7 @@ st.markdown(f"""
         :root {{
             --bg-primary: {'#FFF8F0' if st.session_state.theme == 'light' else '#121212'};
             --bg-secondary: {'#FFFFFF' if st.session_state.theme == 'light' else '#1E1E1E'};
-            --text-primary: {'#2C2C2C' if st.session_state.theme == 'light' else '#E0E0E0'};
+            --text-primary: {"#000000" if st.session_state.theme == 'light' else "#000000"};
             --accent-orange: #FF6B35;
             --accent-orange-light: #FFB07C;
             --accent-green: #8A9A5B;
