@@ -1551,34 +1551,45 @@ st.set_page_config(
 # Add this right after your st.set_page_config() in the MAIN APP section
 st.markdown("""
 <style>
-    /* Force chat input to bottom */
+    /* ──── Force chat input to bottom ──── */
     .stChatFloatingInputContainer {
         position: fixed !important;
         bottom: 0 !important;
         left: 0 !important;
         right: 0 !important;
-        background: var(--bg-secondary) !important;
+        background: var(--bg-secondary, white) !important;
         padding: 16px 24px !important;
-        box-shadow: 0 -6px 20px rgba(0,0,0,0.12) !important;
-        border-top: 1px solid rgba(255,107,53,0.15) !important;
+        box-shadow: 0 -6px 24px rgba(0,0,0,0.1) !important;
+        border-top: 1px solid rgba(255,107,53,0.2) !important;
         z-index: 999 !important;
     }
 
-    /* Give main content enough bottom padding so last messages aren't hidden */
+    /* Give main content breathing room so last messages aren't hidden under input */
     .main .block-container {
-        padding-bottom: 140px !important;   /* ← most important line */
+        padding-bottom: 160px !important;     /* ← most important fix */
+        padding-top: 1rem !important;
     }
 
-    /* Make input bar look nicer */
-    .stChatInput > div > div {
-        border-radius: 999px !important;
-        border: 2px solid var(--accent-orange-light) !important;
-        background: var(--bg-primary) !important;
+    /* Make input look modern */
+    div[data-testid="stChatInput"] > div {
+        border-radius: 9999px !important;
+        border: 2px solid #FFB07C !important;
+        background: #FFF8F0 !important;
+        transition: all 0.2s;
     }
 
-    .stChatInput > div:focus-within {
-        border-color: var(--accent-orange) !important;
-        box-shadow: 0 0 0 4px rgba(255,107,53,0.12) !important;
+    div[data-testid="stChatInput"] > div:focus-within {
+        border-color: #FF6B35 !important;
+        box-shadow: 0 0 0 4px rgba(255,107,53,0.15) !important;
+    }
+
+    /* Prevent double scrollbars */
+    body {
+        overflow-y: hidden !important;
+    }
+    .main {
+        overflow-y: auto !important;
+        height: calc(100vh - 80px) !important;
     }
 </style>
 """, unsafe_allow_html=True)
@@ -1655,24 +1666,6 @@ def render_header():
         </p>
     </div>
     """, unsafe_allow_html=True)
-
-# Call header
-render_header()
-# ═══ END HEADER ═══
-
-# New chat button (optional - add before tabs)
-col1, col2, col3 = st.columns([1, 2, 1])
-with col2:
-    if st.button("🆕 Start Fresh Chat", use_container_width=True):
-        st.session_state.messages = []
-        st.rerun()
-
-tab1, tab2, tab3, tab4, tab5, tab6, tab_scan = st.tabs([
-    "💬 Chat", "📅 Meal Planner", "🛒 Grocery & Inventory",
-    "🍲 Custom Recipes", "🔥 Tried Recipes", "❤️ Favourite Recipes",
-    "📸 Scan Ingredients"
-])
-
 # Sidebar Settings
 # ================= COMPLETE SIDEBAR SECTION =================
 # Replace your entire sidebar section with this
@@ -1902,6 +1895,24 @@ with col2:
     
     st.markdown("---")
     st.caption("Made by Manas")
+
+# Call header
+render_header()
+# ═══ END HEADER ═══
+
+# New chat button (optional - add before tabs)
+col1, col2, col3 = st.columns([1, 2, 1])
+with col2:
+    if st.button("🆕 Start Fresh Chat", use_container_width=True):
+        st.session_state.messages = []
+        st.rerun()
+
+tab1, tab2, tab3, tab4, tab5, tab6, tab_scan = st.tabs([
+    "💬 Chat", "📅 Meal Planner", "🛒 Grocery & Inventory",
+    "🍲 Custom Recipes", "🔥 Tried Recipes", "❤️ Favourite Recipes",
+    "📸 Scan Ingredients"
+])
+
 # ────────────── CHAT TAB ──────────────
 with tab1:
     st.subheader("💬 Chat with KitchenMate")
@@ -2253,19 +2264,14 @@ if prompt:
         with st.chat_message("user"):
             st.markdown(prompt)
         with st.chat_message("assistant"):
-# ────────────────────────────────────────────────
-# LOADING MESSAGES (move this UP in the file)
-# ────────────────────────────────────────────────
-         cooking_phrases = [
+            with st.spinner(random.choice([
     "Simmering your recipe… 🍲",
     "Chopping ingredients… 🔪",
     "Mixing flavors… 🥄",
     "Heating the pan… 🍳",
     "Tasting for perfection… 👨‍🍳"
-]
-loader_text = random.choice(cooking_phrases)
-
-with st.spinner(loader_text):
+])):
+    # your streaming code here
                 try:
                     stream = client.chat.completions.create(
                         messages=[{"role": "system", "content": get_system_prompt()}, *st.session_state.messages],
@@ -2299,55 +2305,60 @@ with st.spinner(loader_text):
                         st.session_state.listening_status = "listening"
     
 if st.button("😴 Feeling Lazy? Suggest from Inventory"):
-        inventory_str = ", ".join(st.session_state.inventory.keys())
-        lazy_prompt = f"Suggest a simple recipe using only these ingredients: {inventory_str}. Keep it easy and quick."
-        st.session_state.messages.append({"role": "user", "content": lazy_prompt})
-        with st.chat_message("user"):
-            st.markdown(lazy_prompt)
-        with st.chat_message("assistant"):
-            cooking_phrases = [
-    "Simmering your recipe… 🍲",
-    "Chopping ingredients… 🔪",
-    "Mixing flavors… 🥄",
-    "Heating the pan… 🍳",
-    "Tasting for perfection… 👨‍🍳"
-]
-loader_text = random.choice(cooking_phrases)
-
-with st.spinner(loader_text):
-                try:
-                    stream = client.chat.completions.create(
-                        messages=[{"role": "system", "content": get_system_prompt()}, *st.session_state.messages],
-                        model="llama-3.3-70b-versatile",
-                        temperature=0.75,
-                        max_tokens=700,
-                        stream=True
-                    )
-                    response = ""
-                    placeholder = st.empty()
-                    for chunk in stream:
-                        if chunk.choices[0].delta.content:
-                            response += chunk.choices[0].delta.content
-                            placeholder.markdown(response)
-                    st.session_state.messages.append({"role": "assistant", "content": response})
-                    st.session_state.last_recipe = response
+    inventory_str = ", ".join(st.session_state.inventory.keys())
+    lazy_prompt = f"Suggest a simple recipe using only these ingredients: {inventory_str}. Keep it easy and quick."
+    
+    st.session_state.messages.append({"role": "user", "content": lazy_prompt})
+    
+    with st.chat_message("user"):
+        st.markdown(lazy_prompt)
+    
+    with st.chat_message("assistant"):
+        with st.spinner(random.choice([
+            "Simmering your recipe… 🍲",
+            "Chopping ingredients… 🔪",
+            "Mixing flavors… 🥄",
+            "Heating the pan… 🍳",
+            "Tasting for perfection… 👨‍🍳"
+        ])):
+            try:
+                stream = client.chat.completions.create(
+                    messages=[{"role": "system", "content": get_system_prompt()}, *st.session_state.messages],
+                    model="llama-3.3-70b-versatile",
+                    temperature=0.75,
+                    max_tokens=700,
+                    stream=True
+                )
+                
+                response = ""
+                placeholder = st.empty()
+                
+                for chunk in stream:
+                    if chunk.choices[0].delta.content:
+                        response += chunk.choices[0].delta.content
+                        placeholder.markdown(response)
+                
+                # Save the final response
+                st.session_state.messages.append({"role": "assistant", "content": response})
+                st.session_state.last_recipe = response
+                
+                # Voice output if enabled
+                if st.session_state.voice_enabled and response:
+                    lang_code = "hi" if st.session_state.voice_language == "Hindi" else "en"
+                    audio_fp = text_to_speech(response, lang_code)
+                    if audio_fp:
+                        st.audio(audio_fp, format="audio/mp3", autoplay=False)
+                
+                # Resume continuous listening if active
+                if st.session_state.listening_active:
+                    time.sleep(2)
+                    st.session_state.listening_status = "listening"
+                    st.rerun()
                     
-                    if st.session_state.voice_enabled and response:
-                        lang_code = "hi" if st.session_state.voice_language == "Hindi" else "en"
-                        audio_fp = text_to_speech(response, lang_code)
-                        if audio_fp:
-                            st.audio(audio_fp, format="audio/mp3", autoplay=False)
-                    
-                    # Resume listening if in continuous mode
-                    if st.session_state.listening_active:
-                        time.sleep(2)
-                        st.session_state.listening_status = "listening"
-                        st.rerun()
-                except Exception as e:
-                    st.error(f"Error: {str(e)}")
-                    if st.session_state.listening_active:
-                        st.session_state.listening_status = "listening"
-                   
+            except Exception as e:
+                st.error(f"Error: {str(e)}")
+                if st.session_state.listening_active:
+                    st.session_state.listening_status = "listening"
    
 if st.session_state.messages and st.session_state.messages[-1]["role"] == "assistant":
     col1, col2, col3, col4 = st.columns([2,2,2,2])
@@ -2813,12 +2824,6 @@ with tab3:
         if st.button("Clear Grocery"):
             st.session_state.grocery_list.clear()
             st.rerun()
-    with st.sidebar:
-         st.markdown("---")
-    st.subheader("➕ Add to Inventory")
-    new_item = st.text_input("Item Name")
-    new_qty = st.number_input("Quantity (g/ml/pcs)", min_value=0, step=50)
-    new_price = st.number_input("Price per 100g/piece (₹)", min_value=0.0, step=1.0)
 
     expiry_option = st.radio("Expiry Date", ["Estimate for me", "Manual input"])
 
