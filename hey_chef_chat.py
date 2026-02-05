@@ -1802,23 +1802,12 @@ for msg in st.session_state.messages:
    
     # Voice Input Section
 video_id = None
-    
-    # Check for YouTube URL in text input first
-# Chat input with attachment button
-col_input, col_attach = st.columns([9, 1])
 
-with col_input:
-    prompt = st.chat_input("Ask anything... (or upload gym diet chart)")
-
-with col_attach:
-    uploaded_file = st.file_uploader(
-        label="",
-        type=["jpg", "jpeg", "png", "pdf"],
-        accept_multiple_files=False,
-        label_visibility="collapsed",
-        key="chat_file_uploader"
-    )
-
+# Show chat history
+for msg in st.session_state.messages:
+    with st.chat_message(msg["role"]):
+        st.markdown(msg["content"])
+           
 # Chat input with attachment button
 col_input, col_attach = st.columns([9, 1])
 
