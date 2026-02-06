@@ -10,22 +10,22 @@ st.set_page_config(page_title="Login - KitchenMate", layout="centered")
 st.title("🔐 Finishing Google Login...")
 
 with st.spinner("Verifying your Google account..."):
-    # Get all query params Google sent us
-    query_params = st.experimental_get_query_params()
-    auth_code = query_params.get("code", [None])[0]
-    error = query_params.get("error", [None])[0]
+    # Get all query params Google sent us (NEW API)
+    query_params = st.query_params
+    auth_code = query_params.get("code", None)
+    error = query_params.get("error", None)
 
     if error:
         st.error(f"Google login failed: {error}")
         if st.button("← Back to Login"):
-            st.experimental_set_query_params()
+            st.query_params.clear()
             st.rerun()
         st.stop()
 
     if not auth_code:
         st.error("No authorization code received from Google. Please try again.")
         if st.button("← Try Login Again"):
-            st.experimental_set_query_params()
+            st.query_params.clear()
             st.rerun()
         st.stop()
 
@@ -68,7 +68,7 @@ with st.spinner("Verifying your Google account..."):
         time.sleep(2)
 
         # Clear URL params and go back to main app
-        st.experimental_set_query_params()
+        st.query_params.clear()
         st.rerun()
 
     except Exception as e:
@@ -76,5 +76,5 @@ with st.spinner("Verifying your Google account..."):
         st.write("Technical details (for debug):")
         st.code(str(e))
         if st.button("← Try Again"):
-            st.experimental_set_query_params()
+            st.query_params.clear()
             st.rerun()
