@@ -454,7 +454,7 @@ if "gym_diet_chart" not in st.session_state:
     st.session_state.gym_diet_chart = None  # stores analyzed/edited chart summary
 if "detected_ingredients" not in st.session_state:
     st.session_state.detected_ingredients = []
-    
+
 # Listen for Firebase login from iframe
 st.components.v1.html("""
     <script>
@@ -1560,45 +1560,69 @@ st.set_page_config(
 st.markdown("""
 <style>
     /* ══════════════════════════════════════════════════════════════
-       FIXED GREY CHAT INPUT AT BOTTOM (MODERN STYLE)
+       FORCE CHAT INPUT TO STAY AT BOTTOM (AGGRESSIVE FIX)
        ══════════════════════════════════════════════════════════════ */
     
-    /* Force chat input container to bottom with grey background */
+    /* Target the actual chat input container */
+    [data-testid="stChatInput"] {
+        position: fixed !important;
+        bottom: 0 !important;
+        left: 0 !important;
+        right: 0 !important;
+        background: #f5f5f5 !important;
+        padding: 20px !important;
+        box-shadow: 0 -4px 20px rgba(0,0,0,0.15) !important;
+        border-top: 2px solid #e0e0e0 !important;
+        z-index: 999999 !important;
+        margin: 0 !important;
+    }
+    
+    /* Also target parent container */
     .stChatFloatingInputContainer {
         position: fixed !important;
         bottom: 0 !important;
         left: 0 !important;
         right: 0 !important;
-        background: #f5f5f5 !important;  /* Grey background */
-        padding: 16px 24px !important;
-        box-shadow: 0 -4px 16px rgba(0,0,0,0.12) !important;
+        background: #f5f5f5 !important;
+        padding: 20px !important;
+        box-shadow: 0 -4px 20px rgba(0,0,0,0.15) !important;
         border-top: 2px solid #e0e0e0 !important;
-        z-index: 9999 !important;
+        z-index: 999999 !important;
     }
-
-    /* Make the input field itself white with grey border */
-    div[data-testid="stChatInput"] > div {
+    
+    /* Style the input field itself */
+    [data-testid="stChatInput"] input {
         border-radius: 24px !important;
         border: 2px solid #d0d0d0 !important;
         background: white !important;
-        transition: all 0.2s;
+        padding: 12px 20px !important;
+        font-size: 16px !important;
     }
-
-    div[data-testid="stChatInput"] > div:focus-within {
+    
+    [data-testid="stChatInput"] input:focus {
         border-color: #FF6B35 !important;
-        box-shadow: 0 0 0 3px rgba(255,107,53,0.1) !important;
+        box-shadow: 0 0 0 3px rgba(255,107,53,0.15) !important;
+        outline: none !important;
     }
-
-    /* Give main content breathing room */
+    
+    /* Add huge bottom padding to main content area */
     .main .block-container {
-        padding-bottom: 140px !important;
-        padding-top: 1rem !important;
+        padding-bottom: 180px !important;
     }
-
-    /* Prevent scrollbar issues */
-    .main {
-        overflow-y: auto !important;
-        height: 100vh !important;
+    
+    /* Ensure chat messages scroll properly */
+    section[data-testid="stVerticalBlock"] {
+        padding-bottom: 180px !important;
+    }
+    
+    /* Hide default Streamlit footer that might overlap */
+    footer {
+        display: none !important;
+    }
+    
+    /* Ensure sidebar doesn't overlap input */
+    section[data-testid="stSidebar"] {
+        z-index: 99999 !important;
     }
 </style>
 """, unsafe_allow_html=True)
@@ -1988,24 +2012,24 @@ for msg in st.session_state.messages:
 # Chat input with attachment button
 col_input, col_attach = st.columns([9, 1])
 
+# Add hint text ABOVE input
+st.markdown("""
+<div style="
+    text-align: center;
+    color: #6B6B6B;
+    font-size: 0.85rem;
+    margin-bottom: 12px;
+">
+    💡 Try: "Quick dinner with chicken" • "Low-carb breakfast" • "Use expiring tomatoes"
+</div>
+""", unsafe_allow_html=True)
+
 with col_input:
     # Enhanced chat input with better placeholder
     prompt = st.chat_input(
         placeholder="🔍 Ask me anything... recipes, substitutes, cooking tips, meal ideas!",
         key="main_chat_input"
     )
-
-# Add hint text above input (optional)
-st.markdown("""
-<div style="
-    text-align: center;
-    color: #6B6B6B;
-    font-size: 0.85rem;
-    margin: 16px 0;
-">
-    💡 Try: "Quick dinner with chicken" • "Low-carb breakfast" • "Use expiring tomatoes"
-</div>
-""", unsafe_allow_html=True)
 
 with col_attach:
     uploaded_file = st.file_uploader(
