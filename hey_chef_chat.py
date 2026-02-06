@@ -1625,7 +1625,60 @@ st.markdown("""
     section[data-testid="stSidebar"] {
         z-index: 99999 !important;
     }
-
+/* ══════════════════════════════════════════════════════════════
+       STYLE FILE UPLOAD AS + ICON BUTTON
+       ══════════════════════════════════════════════════════════════ */
+    
+    /* Hide the default file upload UI */
+    [data-testid="stFileUploader"] {
+        width: 50px !important;
+        height: 50px !important;
+    }
+    
+    [data-testid="stFileUploader"] > div {
+        background: white !important;
+        border-radius: 50% !important;
+        width: 50px !important;
+        height: 50px !important;
+        display: flex !important;
+        align-items: center !important;
+        justify-content: center !important;
+        cursor: pointer !important;
+        box-shadow: 0 2px 8px rgba(0,0,0,0.1) !important;
+        transition: all 0.2s ease !important;
+    }
+    
+    [data-testid="stFileUploader"] > div:hover {
+        background: #FF6B35 !important;
+        box-shadow: 0 4px 12px rgba(255,107,53,0.3) !important;
+        transform: scale(1.05) !important;
+    }
+    
+    /* Style the label as a + icon */
+    [data-testid="stFileUploader"] label {
+        font-size: 28px !important;
+        font-weight: 300 !important;
+        margin: 0 !important;
+        color: #FF6B35 !important;
+        cursor: pointer !important;
+    }
+    
+    [data-testid="stFileUploader"] > div:hover label {
+        color: white !important;
+    }
+    
+    /* Hide the drag-drop text */
+    [data-testid="stFileUploader"] section {
+        display: none !important;
+    }
+    
+    /* Position file uploader in fixed container */
+    [data-testid="stFileUploader"] {
+        position: fixed !important;
+        bottom: 20px !important;
+        left: 24px !important;
+        z-index: 9999999 !important;
+    }
 </style>
 """, unsafe_allow_html=True)
 
