@@ -23,6 +23,31 @@ import firebase_admin
 from firebase_admin import credentials, firestore
 import uuid
 from google_auth_oauthlib.flow import Flow
+
+# ═══════════════════════════════════════════════════════════════
+# CUSTOM CSS FOR CHAT INPUT STYLING
+# ═══════════════════════════════════════════════════════════════
+st.markdown("""
+    <style>
+    /* Change chat input text and textarea color to grey */
+    .stChatInput textarea,
+    .stChatInput input {
+        color: #b0b0b0 !important;
+    }
+    
+    /* Change chat input placeholder color to grey */
+    .stChatInput textarea::placeholder,
+    .stChatInput input::placeholder {
+        color: #808080 !important;
+    }
+    
+    /* Match input background with chatbox */
+    .stChatInput {
+        background-color: transparent !important;
+    }
+    </style>
+""", unsafe_allow_html=True)
+
 # ═══════════════════════════════════════════════════════════════
 # HELPER FUNCTIONS - UI COMPONENTS
 # ═══════════════════════════════════════════════════════════════
@@ -2231,11 +2256,11 @@ st.markdown("""
     [data-testid="stChatInput"] input {
         border: none !important;
         background: transparent !important;
-        color: #ffffff !important;
+        color: #b0b0b0 !important;
     }
     
     [data-testid="stChatInput"] input::placeholder {
-        color: rgba(255, 255, 255, 0.5) !important;
+        color: #808080 !important;
     }
 
     [data-testid="stChatInput"] input:focus {
