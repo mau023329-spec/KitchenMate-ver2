@@ -611,7 +611,7 @@ def detect_ingredients_from_image(image_bytes):
     try:
         base64_image = base64.b64encode(image_bytes).decode('utf-8')
         response = openrouter_client.chat.completions.create( 
-            model="google/gemini-flash-1.5",
+            model="google/gemini-2.0-flash-exp:free",  # Updated to working model
             messages=[
                 {
                     "role": "user",
