@@ -85,7 +85,13 @@ def format_recipe(recipe_text):
             st.code(recipe_text, language=None)
             st.balloons()
             st.toast("Full recipe copied!", icon="📄")
-
+def auto_extract_ingredients_from_recipe(recipe_text):
+    """
+    Automatically extracts ingredients list from last recipe.
+    Returns: list of ingredient names (strings)
+    """
+    ingredients = extract_ingredients(recipe_text, jain_mode=st.session_state.jain_mode)
+    return [ing['name'] for ing in ingredients]
 # ═══════════════════════════════════════════════════════════════
 # FIREBASE INITIALIZATION (safe for Streamlit reruns)
 # ═══════════════════════════════════════════════════════════════
@@ -446,7 +452,9 @@ if "user_preferences" not in st.session_state:
     st.session_state.user_preferences = {}
 if "gym_diet_chart" not in st.session_state:
     st.session_state.gym_diet_chart = None  # stores analyzed/edited chart summary
-
+if "detected_ingredients" not in st.session_state:
+    st.session_state.detected_ingredients = []
+    
 # Listen for Firebase login from iframe
 st.components.v1.html("""
     <script>
@@ -1551,45 +1559,46 @@ st.set_page_config(
 # Add this right after your st.set_page_config() in the MAIN APP section
 st.markdown("""
 <style>
-    /* ──── Force chat input to bottom ──── */
+    /* ══════════════════════════════════════════════════════════════
+       FIXED GREY CHAT INPUT AT BOTTOM (MODERN STYLE)
+       ══════════════════════════════════════════════════════════════ */
+    
+    /* Force chat input container to bottom with grey background */
     .stChatFloatingInputContainer {
         position: fixed !important;
         bottom: 0 !important;
         left: 0 !important;
         right: 0 !important;
-        background: var(--bg-secondary, white) !important;
+        background: #f5f5f5 !important;  /* Grey background */
         padding: 16px 24px !important;
-        box-shadow: 0 -6px 24px rgba(0,0,0,0.1) !important;
-        border-top: 1px solid rgba(255,107,53,0.2) !important;
-        z-index: 999 !important;
+        box-shadow: 0 -4px 16px rgba(0,0,0,0.12) !important;
+        border-top: 2px solid #e0e0e0 !important;
+        z-index: 9999 !important;
     }
 
-    /* Give main content breathing room so last messages aren't hidden under input */
-    .main .block-container {
-        padding-bottom: 160px !important;     /* ← most important fix */
-        padding-top: 1rem !important;
-    }
-
-    /* Make input look modern */
+    /* Make the input field itself white with grey border */
     div[data-testid="stChatInput"] > div {
-        border-radius: 9999px !important;
-        border: 2px solid #FFB07C !important;
-        background: #FFF8F0 !important;
+        border-radius: 24px !important;
+        border: 2px solid #d0d0d0 !important;
+        background: white !important;
         transition: all 0.2s;
     }
 
     div[data-testid="stChatInput"] > div:focus-within {
         border-color: #FF6B35 !important;
-        box-shadow: 0 0 0 4px rgba(255,107,53,0.15) !important;
+        box-shadow: 0 0 0 3px rgba(255,107,53,0.1) !important;
     }
 
-    /* Prevent double scrollbars */
-    body {
-        overflow-y: hidden !important;
+    /* Give main content breathing room */
+    .main .block-container {
+        padding-bottom: 140px !important;
+        padding-top: 1rem !important;
     }
+
+    /* Prevent scrollbar issues */
     .main {
         overflow-y: auto !important;
-        height: calc(100vh - 80px) !important;
+        height: 100vh !important;
     }
 </style>
 """, unsafe_allow_html=True)
@@ -2342,22 +2351,44 @@ if st.session_state.messages and st.session_state.messages[-1]["role"] == "assis
     col1, col2, col3, col4 = st.columns([2,2,2,2])
     with col1:
         if st.button("🍳 Start Cooking"):
-            st.session_state.show_cooking_check = True
-            st.session_state.show_nutrition = False
-            st.session_state.show_substitutes = False
-            st.session_state.ingredients_shown = False
-            st.rerun()
+            # Auto-extract ingredients from recipe
+            auto_ingredients = auto_extract_ingredients_from_recipe(st.session_state.last_recipe)
+            
+            if not auto_ingredients:
+                st.error("❌ Could not detect ingredients. Try rephrasing the recipe.")
+            else:
+                # Check which are missing from inventory
+                missing_items = []
+                for item in auto_ingredients:
+                    found = False
+                    for inv_key in st.session_state.inventory:
+                        if inv_key in item or item in inv_key:
+                            found = True
+                            break
+                    if not found:
+                        missing_items.append(item)
+                
+                # Store for later use
+                st.session_state.detected_ingredients = auto_ingredients
+                st.session_state.missing_ingredients = missing_items
+                st.session_state.show_cooking_check = True
+                st.session_state.show_nutrition = False
+                st.session_state.show_substitutes = False
+                st.rerun()
+    
     with col2:
         if st.button("🥗 Calculate Nutrition"):
             st.session_state.show_nutrition = True
             st.session_state.show_cooking_check = False
             st.session_state.show_substitutes = False
             st.rerun()
+    
     with col3:
         if st.button("❤️ Favourite"):
             recipe_name = f"Recipe {len(st.session_state.favourite_recipes) + 1}"
             st.session_state.favourite_recipes[recipe_name] = st.session_state.last_recipe
             st.success(f"Added to Favourites: {recipe_name}")
+    
     with col4:
         if st.button("🔄 Substitutes"):
             st.session_state.show_substitutes = True
@@ -2365,26 +2396,28 @@ if st.session_state.messages and st.session_state.messages[-1]["role"] == "assis
             st.session_state.show_nutrition = False
             st.rerun()
     
-    # ═══ ADD RECIPE FORMATTER HERE ═══
-    # Format last recipe nicely
+    # ═══ RECIPE FORMATTER (keep this as-is) ═══
     if st.session_state.last_recipe:
         st.markdown("---")
         format_recipe(st.session_state.last_recipe)
-    # ═══ END RECIPE FORMATTER ═══
    
 if st.session_state.show_cooking_check and not st.session_state.cooking_mode:
-        st.markdown("---")
-        st.subheader("🍳 Ingredient Check")
-        ingredients = extract_ingredients(st.session_state.last_recipe, jain_mode=st.session_state.jain_mode)
-       
-        if not ingredients:
-            st.info("No ingredients could be detected in the last recipe.")
+    st.markdown("---")
+    st.subheader("🍳 Ingredient Check")
+    
+    # Use pre-detected ingredients
+    detected_ingredients = st.session_state.get('detected_ingredients', [])
+    missing = st.session_state.get('missing_ingredients', [])
+    
+    if not detected_ingredients:
+        st.error("❌ No ingredients detected. Please try again.")
+        if st.button("Close"):
             st.session_state.show_cooking_check = False
             st.rerun()
-        
-        # ⭐ ADD THIS JAIN MODE WARNING HERE ⭐
+    else:
+        # ⭐ JAIN MODE WARNING ⭐
         if st.session_state.jain_mode:
-            non_jain = [ing['name'] for ing in ingredients if not is_jain_compatible(ing['name'])]
+            non_jain = [item for item in detected_ingredients if not is_jain_compatible(item)]
             if non_jain:
                 st.warning(f"⚠️ **Jain Alert:** This recipe contains: {', '.join(non_jain)}")
                 st.info("**Suggested substitutes:**")
@@ -2392,92 +2425,76 @@ if st.session_state.show_cooking_check and not st.session_state.cooking_mode:
                     substitute = get_jain_substitute(item)
                     st.write(f"• {item.capitalize()} → {substitute}")
                 st.markdown("---")
-        # ⭐ END OF JAIN WARNING ⭐
-       
-        if not st.session_state.ingredients_shown:
-            st.session_state.ingredients_shown = True
-            missing = []
-            # ... rest of the code continues ...
-            for ing in ingredients:
-                name = ing['name'].lower()
-                found_key = None
-                for inv_item in st.session_state.inventory:
-                    if inv_item in name or name in inv_item:
-                        found_key = inv_item
-                        break
-                if not found_key:
-                    missing.append(name)
-            st.session_state.missing_ingredients = missing
-       
-        missing = st.session_state.missing_ingredients
-        status_lines = []
-        total_cost = 0.0
-       
-        for ing in ingredients:
-            name = ing['name'].lower()
-            qty_str = ing['qty_str']
-           
-            scaled_qty = scale_quantity(qty_str, st.session_state.servings)
-            display_qty = convert_quantity(scaled_qty, st.session_state.unit_system)
-           
-            found_key = None
-            for inv_item in st.session_state.inventory:
-                if inv_item in name or name in inv_item:
-                    found_key = inv_item
+        
+        # Show all ingredients with availability status
+        st.write("### Detected Ingredients:")
+        for item in detected_ingredients:
+            found = False
+            for inv_key in st.session_state.inventory:
+                if inv_key in item or item in inv_key:
+                    found = True
+                    current_qty = st.session_state.inventory[inv_key]
+                    status, color = get_quantity_status(current_qty)
+                    st.markdown(f"✅ **{item.capitalize()}**: Available <span style='color:{color};'>[{status}]</span>", unsafe_allow_html=True)
                     break
-           
-            if found_key:
-                current_qty = st.session_state.inventory[found_key]
-                status, color = get_quantity_status(current_qty)
-                display_name = found_key.capitalize()
-               
-                price_per_100 = st.session_state.inventory_prices.get(found_key, 0)
-                est_cost = 0.0
-                if price_per_100 > 0:
-                    match = re.search(r'\d*\.?\d+', qty_str)
-                    if match:
-                        num = float(match.group())
-                        portion_factor = num / 100
-                        est_cost = round(price_per_100 * portion_factor * st.session_state.servings, 1)
-                        total_cost += est_cost
-               
-                line = f"✅ **{display_name}**: {display_qty}   <span style='color:{color};'>[{status}]</span>"
-                status_lines.append(line)
-            else:
-                status_lines.append(f"❌ **{name.capitalize()}**: {display_qty}")
-       
-        st.write("### Ingredients List:")
-        for line in status_lines:
-            st.markdown(line, unsafe_allow_html=True)
-       
-        if total_cost > 0:
-            st.caption(f"💰 Estimated cost ≈ ₹{total_cost:.1f}")
-       
+            if not found:
+                st.markdown(f"❌ **{item.capitalize()}**: Missing")
+        
+        st.markdown("---")
+        
+        # Handle missing ingredients
         if missing:
-            st.error(f"**Missing:** {', '.join(m.capitalize() for m in missing)}")
-            col1, col2 = st.columns(2)
-            if col1.button("❌ Abort"):
-                st.session_state.show_cooking_check = False
-                st.session_state.ingredients_shown = False
-                st.rerun()
-            if col2.button("➕ Add Missing to Grocery"):
-                for n in missing:
-                    st.session_state.grocery_list.add(n)
-                st.success(f"Added {len(missing)} items to grocery list!")
-                st.session_state.show_cooking_check = False
-                st.session_state.ingredients_shown = False
-                st.rerun()
-        else:
-            st.success("✅ All ingredients available! Ready to cook?")
-            if st.button("👨‍🍳 Start Step-by-Step Cooking"):
-                st.session_state.cooking_steps = extract_steps(st.session_state.last_recipe)
-                if st.session_state.cooking_steps:
-                    st.session_state.cooking_mode = True
-                    st.session_state.current_step = 0
+            st.error(f"**⚠️ Missing {len(missing)} ingredients:**")
+            st.write(", ".join([m.capitalize() for m in missing]))
+            
+            col1, col2, col3 = st.columns(3)
+            
+            with col1:
+                if st.button("❌ Cancel Cooking"):
                     st.session_state.show_cooking_check = False
                     st.rerun()
-                else:
-                    st.error("Could not extract steps from recipe")
+            
+            with col2:
+                if st.button("➕ Add to Grocery List"):
+                    for item in missing:
+                        st.session_state.grocery_list.add(item.lower())
+                    st.success(f"✅ Added {len(missing)} items to grocery list!")
+                    st.session_state.show_cooking_check = False
+                    st.rerun()
+            
+            with col3:
+                if st.button("🍳 Cook Anyway"):
+                    # Extract steps and start cooking
+                    st.session_state.cooking_steps = extract_steps(st.session_state.last_recipe)
+                    if st.session_state.cooking_steps:
+                        st.session_state.cooking_mode = True
+                        st.session_state.current_step = 0
+                        st.session_state.show_cooking_check = False
+                        st.rerun()
+                    else:
+                        st.error("Could not extract cooking steps from recipe")
+        
+        else:
+            # All ingredients available
+            st.success("✅ All ingredients available! Ready to start?")
+            
+            col1, col2 = st.columns(2)
+            
+            with col1:
+                if st.button("❌ Cancel"):
+                    st.session_state.show_cooking_check = False
+                    st.rerun()
+            
+            with col2:
+                if st.button("👨‍🍳 Start Step-by-Step Cooking", type="primary"):
+                    st.session_state.cooking_steps = extract_steps(st.session_state.last_recipe)
+                    if st.session_state.cooking_steps:
+                        st.session_state.cooking_mode = True
+                        st.session_state.current_step = 0
+                        st.session_state.show_cooking_check = False
+                        st.rerun()
+                    else:
+                        st.error("Could not extract steps from recipe")
 
 if st.session_state.show_nutrition and not st.session_state.cooking_mode:
         st.markdown("---")
