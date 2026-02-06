@@ -2187,50 +2187,6 @@ st.markdown("""
         height: 50px !important;
     }
     
-    [data-testid="stFileUploadDropzone"] {
-        width: 50px !important;
-        height: 50px !important;
-        min-height: 50px !important;
-        border-radius: 50% !important;
-        background: #FF6B35 !important;
-        border: none !important;
-        display: flex !important;
-        align-items: center !important;
-        justify-content: center !important;
-        cursor: pointer !important;
-        box-shadow: 0 3px 10px rgba(255,107,53,0.4) !important;
-        transition: all 0.2s !important;
-        padding: 0 !important;
-    }
-    
-    [data-testid="stFileUploadDropzone"]:hover {
-        background: #e55a2d !important;
-        transform: scale(1.08) !important;
-        box-shadow: 0 4px 14px rgba(255,107,53,0.5) !important;
-    }
-    
-    /* Hide the default upload text */
-    [data-testid="stFileUploadDropzone"] section {
-        display: none !important;
-    }
-    
-    [data-testid="stFileUploadDropzone"] button {
-        display: none !important;
-    }
-    
-    /* Add the + icon using CSS */
-    [data-testid="stFileUploadDropzone"]::before {
-        content: "+" !important;
-        font-size: 28px !important;
-        font-weight: bold !important;
-        color: white !important;
-        position: absolute !important;
-        top: 50% !important;
-        left: 50% !important;
-        transform: translate(-50%, -50%) !important;
-        pointer-events: none !important;
-    }
-
     /* ═══════════════════════════════════════════════════════ */
     /* CHAT INPUT BOX */
     /* ═══════════════════════════════════════════════════════ */
@@ -2290,20 +2246,19 @@ st.markdown("""
 </style>
 """, unsafe_allow_html=True)
 
-# 2. The pinned bar layout - FUNCTIONAL UPLOAD BUTTON
+# 2. The pinned bar layout - Normal file upload
 st.markdown('<div class="pinned-chat-bar">', unsafe_allow_html=True)
 
-col_plus, col_input = st.columns([1, 12], gap="small")
+col_upload, col_input = st.columns([3, 9], gap="small")
 
-with col_plus:
-    # Functional file uploader (CSS makes it look like a + button)
+with col_upload:
+    # Normal file uploader with drag and drop
     uploaded_file = st.file_uploader(
-        label="",
+        label="📎 Upload file",
         type=["jpg", "jpeg", "png", "pdf", "txt"],
         accept_multiple_files=False,
         key="pinned_file_uploader",
-        label_visibility="collapsed",
-        help="Upload file (PDF, image, text)"
+        help="Drag and drop or click to upload (PDF, image, text)"
     )
 
 with col_input:
