@@ -1590,20 +1590,21 @@ st.markdown("""
         z-index: 999999 !important;
     }
     
-    /* Style the input field itself */
-    [data-testid="stChatInput"] input {
-        border-radius: 24px !important;
-        border: 2px solid #d0d0d0 !important;
-        background: white !important;
-        padding: 12px 20px !important;
-        font-size: 16px !important;
-    }
-    
-    [data-testid="stChatInput"] input:focus {
-        border-color: #FF6B35 !important;
-        box-shadow: 0 0 0 3px rgba(255,107,53,0.15) !important;
-        outline: none !important;
-    }
+    /* Style the input field itself - NO BORDER */
+[data-testid="stChatInput"] input {
+    border-radius: 24px !important;
+    border: none !important;
+    background: white !important;
+    padding: 12px 20px !important;
+    font-size: 16px !important;
+    box-shadow: 0 2px 8px rgba(0,0,0,0.08) !important;
+}
+
+[data-testid="stChatInput"] input:focus {
+    border: none !important;
+    box-shadow: 0 0 0 3px rgba(255,107,53,0.15) !important;
+    outline: none !important;
+}
     
     /* Add huge bottom padding to main content area */
     .main .block-container {
@@ -1624,8 +1625,10 @@ st.markdown("""
     section[data-testid="stSidebar"] {
         z-index: 99999 !important;
     }
+
 </style>
 """, unsafe_allow_html=True)
+
 # ────── EXPIRATION WARNING BANNER ──────
 expiring_items = []
 expired_items = []
@@ -2009,35 +2012,44 @@ video_id = None
 for msg in st.session_state.messages:
     display_message(msg["role"], msg["content"])
 
-# Chat input with attachment button
-col_input, col_attach = st.columns([9, 1])
-
-# Add hint text ABOVE input
+# Chat input with integrated file upload (+ icon style)
 st.markdown("""
 <div style="
-    text-align: center;
-    color: #6B6B6B;
-    font-size: 0.85rem;
-    margin-bottom: 12px;
+    position: fixed;
+    bottom: 0;
+    left: 0;
+    right: 0;
+    background: #f5f5f5;
+    padding: 16px 24px;
+    box-shadow: 0 -4px 20px rgba(0,0,0,0.15);
+    border-top: 2px solid #e0e0e0;
+    z-index: 999999;
+    display: flex;
+    align-items: center;
+    gap: 12px;
 ">
-    💡 Try: "Quick dinner with chicken" • "Low-carb breakfast" • "Use expiring tomatoes"
 </div>
 """, unsafe_allow_html=True)
 
+# Create columns for + button and input
+col_attach, col_input = st.columns([0.5, 11.5])
+
+with col_attach:
+    # File upload styled as + button
+    uploaded_file = st.file_uploader(
+        label="📎",
+        type=["jpg", "jpeg", "png", "pdf"],
+        accept_multiple_files=False,
+        label_visibility="visible",
+        key="chat_file_uploader",
+        help="Upload image or PDF"
+    )
+
 with col_input:
-    # Enhanced chat input with better placeholder
+    # Chat input
     prompt = st.chat_input(
         placeholder="🔍 Ask me anything... recipes, substitutes, cooking tips, meal ideas!",
         key="main_chat_input"
-    )
-
-with col_attach:
-    uploaded_file = st.file_uploader(
-        label="",
-        type=["jpg", "jpeg", "png", "pdf"],
-        accept_multiple_files=False,
-        label_visibility="collapsed",
-        key="chat_file_uploader"
     )
 
 # Handle uploaded file (gym diet chart or receipt)
