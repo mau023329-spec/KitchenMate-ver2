@@ -2065,14 +2065,14 @@ video_id = None
 for msg in st.session_state.messages:
     display_message(msg["role"], msg["content"])
 # ────────────────────────────────────────────────
-# FIXED CHAT INPUT + PINNED + BUTTON (working version)
+# FIXED CHAT INPUT + FILE UPLOAD BUTTON ON LEFT
 # ────────────────────────────────────────────────
 
-# 1. Custom CSS for pinned chat bar + nice + button
+# 1. Strong CSS for pinned bottom bar + left + button
 st.markdown("""
 <style>
-    /* Pinned chat bar at bottom */
-    .fixed-chat-bar {
+    /* Pinned bottom chat container */
+    .pinned-chat-bar {
         position: fixed !important;
         bottom: 0 !important;
         left: 0 !important;
@@ -2087,85 +2087,98 @@ st.markdown("""
         gap: 12px !important;
     }
 
-    /* Give main content breathing room so last messages aren't hidden under input */
+    /* Give main content space so messages don't hide under bar */
     .main .block-container {
-        padding-bottom: 160px !important;     /* ← most important fix */
-        padding-top: 1rem !important;
+        padding-bottom: 140px !important;
     }
 
-    /* Hide ugly default file uploader label & drag area */
-    [data-testid="stFileUploader"] > div > div > div > label {
-        display: none !important;
-    }
-    [data-testid="stFileUploader"] section {
+    /* Hide default file uploader junk (label, drag area) */
+    [data-testid="stFileUploader"] label,
+    [data-testid="stFileUploader"] section,
+    [data-testid="stFileUploader"] > div > div:first-child {
         display: none !important;
     }
 
-    /* Style the upload button as a nice + circle */
-    .custom-upload-btn {
-        width: 48px !important;
-        height: 48px !important;
+    /* Beautiful round + button on left */
+    .upload-plus-btn {
+        width: 50px !important;
+        height: 50px !important;
         background: #FF6B35 !important;
         color: white !important;
         border-radius: 50% !important;
+        font-size: 28px !important;
+        font-weight: bold !important;
         display: flex !important;
         align-items: center !important;
         justify-content: center !important;
-        font-size: 28px !important;
-        font-weight: 300 !important;
         cursor: pointer !important;
-        box-shadow: 0 2px 8px rgba(0,0,0,0.1) !important;
-        transition: all 0.2s ease !important;
+        box-shadow: 0 3px 10px rgba(255,107,53,0.3) !important;
+        transition: all 0.2s !important;
         border: none !important;
-    }
-    .custom-upload-btn:hover {
-        background: #E85A2F !important;
-        box-shadow: 0 4px 12px rgba(255,107,53,0.3) !important;
-        transform: scale(1.05) !important;
+        flex-shrink: 0 !important;
     }
 
-    /* Input field styling */
-    [data-testid="stChatInput"] > div {
-        flex: 1 !important;
-        border-radius: 24px !important;
-        border: none !important;
-        background: white !important;
-        padding: 12px 20px !important;
-        font-size: 16px !important;
-        box-shadow: 0 2px 8px rgba(0,0,0,0.08) !important;
+    .upload-plus-btn:hover {
+        background: #e55a2d !important;
+        transform: scale(1.08) !important;
     }
+
+    /* Chat input takes remaining space */
+    [data-testid="stChatInput"] {
+        flex: 1 !important;
+    }
+
+    [data-testid="stChatInput"] > div {
+        border-radius: 999px !important;
+        border: 2px solid #FFB07C !important;
+        background: #FFF8F0 !important;
+        transition: all 0.2s;
+    }
+
+    [data-testid="stChatInput"] input {
+        border: none !important;
+        background: transparent !important;
+    }
+
     [data-testid="stChatInput"] input:focus {
-        box-shadow: 0 0 0 3px rgba(255,107,53,0.15) !important;
+        box-shadow: 0 0 0 3px rgba(255,107,53,0.2) !important;
         outline: none !important;
     }
 </style>
 """, unsafe_allow_html=True)
 
-# 2. The actual pinned bar using HTML + columns inside it
-st.markdown('<div class="fixed-chat-bar">', unsafe_allow_html=True)
-col_attach, col_input = st.columns([1, 10])
+# 2. The pinned bar layout
+st.markdown('<div class="pinned-chat-bar">', unsafe_allow_html=True)
 
-with col_attach:
-    # File uploader (hidden, but clickable via the + div)
+col_plus, col_input = st.columns([1, 12], gap="small")
+
+with col_plus:
+    # Invisible file uploader
     uploaded_file = st.file_uploader(
         label="",
         type=["jpg", "jpeg", "png", "pdf"],
         accept_multiple_files=False,
-        key="chat_file_uploader",
+        key="pinned_file_uploader",
         label_visibility="collapsed"
     )
-    # Overlay nice + icon (visual only)
-    st.markdown('<div class="custom-upload-btn">+</div>', unsafe_allow_html=True)
+    # Visible nice + button overlay
+    st.markdown('<div class="upload-plus-btn">+</div>', unsafe_allow_html=True)
 
 with col_input:
     prompt = st.chat_input(
-        placeholder="🔍 Ask me anything... recipes, substitutes, cooking tips, meal ideas!",
+        placeholder="🔍 Ask me anything... recipes, substitutes, tips...",
         key="main_chat_input"
     )
+
 st.markdown('</div>', unsafe_allow_html=True)
 
-# 3. Handle uploaded file (keep your original logic)
+# 3. Keep your original file handling logic right after this
 if uploaded_file is not None:
+    # ────────────────────────────────────────────────
+    # YOUR ORIGINAL FILE HANDLING CODE GOES HERE
+    # (from st.session_state.messages.append(...) to the end)
+    # Paste your existing if uploaded_file block here unchanged
+    # ────────────────────────────────────────────────
     st.session_state.messages.append({
         "role": "user",
         "content": f"Uploaded: **{uploaded_file.name}**"
