@@ -2071,25 +2071,60 @@ for msg in st.session_state.messages:
 # 1. Strong CSS for pinned bottom bar + left + button
 st.markdown("""
 <style>
-    /* Pinned bottom chat container */
+    /* ═══════════════════════════════════════════════════════ */
+    /* REMOVE WHITE BACKGROUNDS FROM CHAT MESSAGES */
+    /* ═══════════════════════════════════════════════════════ */
+    
+    /* Main chat message container - make transparent */
+    .stChatMessage {
+        background-color: transparent !important;
+    }
+    
+    /* Chat message content styling - subtle colored backgrounds */
+    [data-testid="stChatMessageContent"] {
+        background-color: rgba(28, 131, 225, 0.08) !important;
+        border-radius: 16px !important;
+        padding: 12px 18px !important;
+        border: 1px solid rgba(28, 131, 225, 0.15) !important;
+    }
+    
+    /* User messages - Blue accent */
+    .stChatMessage[data-testid="user-message"] [data-testid="stChatMessageContent"] {
+        background-color: rgba(28, 131, 225, 0.12) !important;
+        border-color: rgba(28, 131, 225, 0.25) !important;
+    }
+    
+    /* Assistant messages - Orange accent (matches your chef theme) */
+    .stChatMessage[data-testid="assistant-message"] [data-testid="stChatMessageContent"] {
+        background-color: rgba(255, 107, 53, 0.08) !important;
+        border-color: rgba(255, 107, 53, 0.2) !important;
+    }
+    
+    /* ═══════════════════════════════════════════════════════ */
+    /* IMPROVED CHAT INPUT AND BOTTOM BAR */
+    /* ═══════════════════════════════════════════════════════ */
+    
+    /* Pinned bottom chat container - DARK THEME */
     .pinned-chat-bar {
         position: fixed !important;
         bottom: 0 !important;
         left: 0 !important;
         right: 0 !important;
-        background: white !important;
+        background: rgba(18, 18, 18, 0.95) !important;  /* Changed from white */
         padding: 16px 24px !important;
-        box-shadow: 0 -6px 24px rgba(0,0,0,0.12) !important;
-        border-top: 1px solid #e0e0e0 !important;
+        box-shadow: 0 -6px 24px rgba(0,0,0,0.3) !important;
+        border-top: 1px solid rgba(255, 107, 53, 0.2) !important;
         z-index: 999 !important;
         display: flex !important;
         align-items: center !important;
         gap: 12px !important;
+        backdrop-filter: blur(10px) !important;
     }
 
     /* Give main content space so messages don't hide under bar */
     .main .block-container {
         padding-bottom: 140px !important;
+        background-color: transparent !important;
     }
 
     /* Hide default file uploader junk (label, drag area) */
@@ -2112,7 +2147,7 @@ st.markdown("""
         align-items: center !important;
         justify-content: center !important;
         cursor: pointer !important;
-        box-shadow: 0 3px 10px rgba(255,107,53,0.3) !important;
+        box-shadow: 0 3px 10px rgba(255,107,53,0.4) !important;
         transition: all 0.2s !important;
         border: none !important;
         flex-shrink: 0 !important;
@@ -2121,6 +2156,7 @@ st.markdown("""
     .upload-plus-btn:hover {
         background: #e55a2d !important;
         transform: scale(1.08) !important;
+        box-shadow: 0 4px 14px rgba(255,107,53,0.5) !important;
     }
 
     /* Chat input takes remaining space */
@@ -2130,15 +2166,27 @@ st.markdown("""
 
     [data-testid="stChatInput"] > div {
         border-radius: 999px !important;
-        border: 2px solid #FFB07C !important;
-        background: #FFF8F0 !important;
+        border: 2px solid rgba(255, 176, 124, 0.3) !important;
+        background: rgba(255, 248, 240, 0.05) !important;  /* More transparent */
         transition: all 0.2s;
+    }
+    
+    [data-testid="stChatInput"] > div:focus-within {
+        border-color: rgba(255, 107, 53, 0.5) !important;
+        box-shadow: 0 0 0 3px rgba(255, 107, 53, 0.1) !important;
+        background: rgba(255, 248, 240, 0.08) !important;
     }
 
     [data-testid="stChatInput"] input {
         border: none !important;
         background: transparent !important;
+        color: #ffffff !important;
     }
+    
+    [data-testid="stChatInput"] input::placeholder {
+        color: rgba(255, 255, 255, 0.5) !important;
+    }
+
 
     [data-testid="stChatInput"] input:focus {
         box-shadow: 0 0 0 3px rgba(255,107,53,0.2) !important;
