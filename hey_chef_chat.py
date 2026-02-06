@@ -2246,28 +2246,19 @@ st.markdown("""
 </style>
 """, unsafe_allow_html=True)
 
-# 2. The pinned bar layout - Normal file upload
-st.markdown('<div class="pinned-chat-bar">', unsafe_allow_html=True)
+# Chat input
+prompt = st.chat_input(
+    placeholder="🔍 Ask me anything... recipes, substitutes, tips...",
+    key="main_chat_input"
+)
 
-col_upload, col_input = st.columns([3, 9], gap="small")
-
-with col_upload:
-    # Normal file uploader with drag and drop
-    uploaded_file = st.file_uploader(
-        label="📎 Upload file",
-        type=["jpg", "jpeg", "png", "pdf", "txt"],
-        accept_multiple_files=False,
-        key="pinned_file_uploader",
-        help="Drag and drop or click to upload (PDF, image, text)"
-    )
-
-with col_input:
-    prompt = st.chat_input(
-        placeholder="🔍 Ask me anything... recipes, substitutes, tips...",
-        key="main_chat_input"
-    )
-
-st.markdown('</div>', unsafe_allow_html=True)
+# File uploader - classic default style
+uploaded_file = st.file_uploader(
+    label="Upload file (PDF, image, text)",
+    type=["jpg", "jpeg", "png", "pdf", "txt"],
+    accept_multiple_files=False,
+    key="pinned_file_uploader"
+)
 
 # 3. Keep your original file handling logic right after this
 if uploaded_file is not None:
