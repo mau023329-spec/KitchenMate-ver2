@@ -2064,66 +2064,124 @@ video_id = None
 # Show chat history with custom styling
 for msg in st.session_state.messages:
     display_message(msg["role"], msg["content"])
+# ────────────────────────────────────────────────
+# FIXED CHAT INPUT + PINNED + BUTTON (working version)
+# ────────────────────────────────────────────────
 
-# Chat input with integrated file upload (+ icon style)
+# 1. Custom CSS for pinned chat bar + nice + button
 st.markdown("""
-<div style="
-    position: fixed;
-    bottom: 0;
-    left: 0;
-    right: 0;
-    background: #f5f5f5;
-    padding: 16px 24px;
-    box-shadow: 0 -4px 20px rgba(0,0,0,0.15);
-    border-top: 2px solid #e0e0e0;
-    z-index: 999999;
-    display: flex;
-    align-items: center;
-    gap: 12px;
-">
-</div>
+<style>
+    /* Pinned chat bar at bottom */
+    .fixed-chat-bar {
+        position: fixed !important;
+        bottom: 0 !important;
+        left: 0 !important;
+        right: 0 !important;
+        background: white !important;
+        padding: 16px 24px !important;
+        box-shadow: 0 -6px 24px rgba(0,0,0,0.12) !important;
+        border-top: 1px solid #e0e0e0 !important;
+        z-index: 999 !important;
+        display: flex !important;
+        align-items: center !important;
+        gap: 12px !important;
+    }
+
+    /* Give main content breathing room so last messages aren't hidden under input */
+    .main .block-container {
+        padding-bottom: 160px !important;     /* ← most important fix */
+        padding-top: 1rem !important;
+    }
+
+    /* Hide ugly default file uploader label & drag area */
+    [data-testid="stFileUploader"] > div > div > div > label {
+        display: none !important;
+    }
+    [data-testid="stFileUploader"] section {
+        display: none !important;
+    }
+
+    /* Style the upload button as a nice + circle */
+    .custom-upload-btn {
+        width: 48px !important;
+        height: 48px !important;
+        background: #FF6B35 !important;
+        color: white !important;
+        border-radius: 50% !important;
+        display: flex !important;
+        align-items: center !important;
+        justify-content: center !important;
+        font-size: 28px !important;
+        font-weight: 300 !important;
+        cursor: pointer !important;
+        box-shadow: 0 2px 8px rgba(0,0,0,0.1) !important;
+        transition: all 0.2s ease !important;
+        border: none !important;
+    }
+    .custom-upload-btn:hover {
+        background: #E85A2F !important;
+        box-shadow: 0 4px 12px rgba(255,107,53,0.3) !important;
+        transform: scale(1.05) !important;
+    }
+
+    /* Input field styling */
+    [data-testid="stChatInput"] > div {
+        flex: 1 !important;
+        border-radius: 24px !important;
+        border: none !important;
+        background: white !important;
+        padding: 12px 20px !important;
+        font-size: 16px !important;
+        box-shadow: 0 2px 8px rgba(0,0,0,0.08) !important;
+    }
+    [data-testid="stChatInput"] input:focus {
+        box-shadow: 0 0 0 3px rgba(255,107,53,0.15) !important;
+        outline: none !important;
+    }
+</style>
 """, unsafe_allow_html=True)
 
-# Create columns for + button and input
-col_attach, col_input = st.columns([0.5, 11.5])
+# 2. The actual pinned bar using HTML + columns inside it
+st.markdown('<div class="fixed-chat-bar">', unsafe_allow_html=True)
+col_attach, col_input = st.columns([1, 10])
 
 with col_attach:
-    # File upload styled as + button
+    # File uploader (hidden, but clickable via the + div)
     uploaded_file = st.file_uploader(
-        label="📎",
+        label="",
         type=["jpg", "jpeg", "png", "pdf"],
         accept_multiple_files=False,
-        label_visibility="visible",
         key="chat_file_uploader",
-        help="Upload image or PDF"
+        label_visibility="collapsed"
     )
+    # Overlay nice + icon (visual only)
+    st.markdown('<div class="custom-upload-btn">+</div>', unsafe_allow_html=True)
 
 with col_input:
-    # Chat input
     prompt = st.chat_input(
         placeholder="🔍 Ask me anything... recipes, substitutes, cooking tips, meal ideas!",
         key="main_chat_input"
     )
+st.markdown('</div>', unsafe_allow_html=True)
 
-# Handle uploaded file (gym diet chart or receipt)
+# 3. Handle uploaded file (keep your original logic)
 if uploaded_file is not None:
-    # Add user message with file name
     st.session_state.messages.append({
         "role": "user",
         "content": f"Uploaded: **{uploaded_file.name}**"
     })
-    
+
     with st.chat_message("user"):
         st.markdown(f"Uploaded: **{uploaded_file.name}**")
         if uploaded_file.type.startswith("image/"):
             st.image(uploaded_file)
         else:
             st.write("PDF uploaded")
-    
+
     with st.chat_message("assistant"):
         with st.spinner("Analyzing file... 📊"):
             chart_text = ""
-            
+
             # Extract text from file
             if uploaded_file.type == "application/pdf":
                 try:
@@ -2133,34 +2191,31 @@ if uploaded_file is not None:
                 except Exception as e:
                     chart_text = f"Error reading PDF: {str(e)}"
             else:
-                # For images - placeholder (add OCR later if needed)
                 chart_text = "Image uploaded - text extraction pending OCR implementation"
-            
+
             # Decide if it's a diet chart or receipt based on filename
             is_receipt = any(word in uploaded_file.name.lower() for word in ["receipt", "bill", "grocery", "kiranastore"])
-            
+
             if is_receipt:
-                # Receipt analysis
                 analysis_prompt = f"""
                 You are a smart grocery receipt scanner.
                 Extract ALL food items, quantities and prices from this receipt text:
                 {chart_text[:4000]}
-                
+
                 Output format (only this, no extra text):
                 Item name | Quantity | Unit | Price (₹)
                 Paneer | 500 | g | 180
                 Tomatoes | 2 | kg | 80
                 ...
-                
+
                 Skip non-food items (soap, bags, etc.).
                 Use standard units (g, kg, ml, L, pcs).
                 """
             else:
-                # Diet chart analysis (default)
                 analysis_prompt = f"""
                 You are a nutrition & fitness expert. Analyze this gym diet chart text:
                 {chart_text[:4000]}
-                
+
                 Extract and summarize in this structured format:
                 Daily Calories: X kcal
                 Protein target: X g
@@ -2169,10 +2224,10 @@ if uploaded_file is not None:
                 Meals per day: X
                 Key rules / foods to avoid: ...
                 Special notes / restrictions: ...
-                
+
                 Return ONLY the structured summary - no extra text.
                 """
-            
+
             try:
                 response = client.chat.completions.create(
                     messages=[{"role": "user", "content": analysis_prompt}],
@@ -2181,7 +2236,7 @@ if uploaded_file is not None:
                     max_tokens=500
                 )
                 summary = response.choices[0].message.content.strip()
-                
+
                 # Editable summary
                 st.markdown("**AI Analysis (edit if needed):**")
                 edited_summary = st.text_area(
@@ -2190,9 +2245,9 @@ if uploaded_file is not None:
                     height=180,
                     key=f"edit_{uploaded_file.name}_{int(time.time())}"  # unique key
                 )
-                
+
                 col1, col2 = st.columns(2)
-                
+
                 if col1.button("💾 Save / Add to Inventory"):
                     if is_receipt:
                         add_items_from_receipt(edited_summary)
@@ -2204,16 +2259,16 @@ if uploaded_file is not None:
                                 "chart_updated": datetime.now().isoformat()
                             }, merge=True)
                         st.success("Saved!")
-                
+
                 if col2.button("📅 Generate Weekly Plan" if not is_receipt else "➕ Add Missing Items"):
                     if is_receipt:
                         add_missing_items_from_receipt(edited_summary)
                     else:
                         generate_weekly_plan_from_chart(edited_summary)
-                        
+
             except Exception as e:
                 st.error(f"Analysis failed: {str(e)}")
-                st.info("Try uploading again or paste text manually.") 
+                st.info("Try uploading again or paste text manually.")
     # Manual voice recording (if not using continuous mode)
 
 if st.session_state.voice_enabled and not st.session_state.listening_active and not video_id and not prompt:
