@@ -320,6 +320,8 @@ def load_user_data():
                 st.session_state.inventory_expiry = data["inventory_expiry"]
             if "grocery_list" in data:
                 st.session_state.grocery_list = set(data["grocery_list"])
+            if "diet_charts" in data:
+                st.session_state.diet_charts = data["diet_charts"]
             
     except Exception as e:
         st.warning(f"Couldn't load saved data: {str(e)}")
@@ -426,6 +428,8 @@ if "tried_recipes" not in st.session_state:
     st.session_state.tried_recipes = []
 if "favourite_recipes" not in st.session_state:
     st.session_state.favourite_recipes = {}
+if "diet_charts" not in st.session_state:
+    st.session_state.diet_charts = {}
 if "unit_system" not in st.session_state:
     st.session_state.unit_system = "metric"
 if "servings" not in st.session_state:
@@ -1999,10 +2003,10 @@ with col2:
         st.session_state.messages = []
         st.rerun()
 
-tab1, tab2, tab3, tab4, tab5, tab6, tab_scan = st.tabs([
+tab1, tab2, tab3, tab4, tab5, tab6, tab_receipt, tab_ingredient_scan, tab_diet = st.tabs([
     "💬 Chat", "📅 Meal Planner", "🛒 Grocery & Inventory",
     "🍲 Custom Recipes", "🔥 Tried Recipes", "❤️ Favourite Recipes",
-    "📸 Scan Ingredients"
+    "🧾 Receipt Scanner", "📸 Ingredient Scanner", "🥗 Diet Charts"
 ])
 
 # ────────────── CHAT TAB ──────────────
@@ -3142,43 +3146,288 @@ with tab6:
                 st.markdown(recipe)
 
 # ────────────── NEW TAB: SCAN INGREDIENTS (OpenRouter) ──────────────
-with tab_scan:
-    st.subheader("📸 Scan Ingredients")
-    st.info("Take or upload photo → AI detects items → add to grocery/inventory")
-
+# ────────────── RECEIPT SCANNER TAB ──────────────
+with tab_receipt:
+    st.subheader("🧾 Receipt Scanner")
+    st.info("Upload receipt photo → AI extracts food items → Review & add to inventory")
+    
     col_cam, col_upload = st.columns(2)
     with col_cam:
-        camera_img = st.camera_input("Take photo of ingredients")
+        receipt_camera = st.camera_input("Take photo of receipt", key="receipt_camera")
     with col_upload:
-        uploaded_img = st.file_uploader("Or upload photo", type=["jpg", "jpeg", "png"])
-
-    img_file = camera_img or uploaded_img
-
-    if img_file is not None:
-        st.image(img_file, caption="Your photo", use_column_width=True)
-
-        if st.button("Detect Ingredients with AI"):
-            with st.spinner("Analyzing photo..."):
-                image_bytes = img_file.getvalue()
+        receipt_upload = st.file_uploader("Or upload receipt", type=["jpg", "jpeg", "png", "pdf"], key="receipt_upload")
+    
+    receipt_img = receipt_camera or receipt_upload
+    
+    if receipt_img is not None:
+        st.image(receipt_img, caption="Your receipt", use_column_width=True)
+        
+        if st.button("🔍 Scan Receipt with AI", key="scan_receipt_btn"):
+            with st.spinner("Analyzing receipt..."):
+                image_bytes = receipt_img.getvalue()
                 detected_items = detect_ingredients_from_image(image_bytes)
+                
                 if detected_items:
-                    st.success("Detected items:")
-                    selected = []
-                    for item in detected_items:
-                        if st.checkbox(item.capitalize()):
-                            selected.append(item)
+                    st.success(f"✅ Found {len(detected_items)} food items!")
+                    
+                    # Store in session state for editing
+                    if "receipt_items" not in st.session_state:
+                        st.session_state.receipt_items = {}
+                    
+                    st.markdown("### 📝 Review Detected Items:")
+                    st.caption("Check items to add, uncheck to skip. You can also edit quantities.")
+                    
+                    cols = st.columns(3)
+                    for idx, item in enumerate(detected_items):
+                        with cols[idx % 3]:
+                            item_name = item.lower()
+                            
+                            # Checkbox for selection
+                            selected = st.checkbox(
+                                f"**{item.capitalize()}**",
+                                value=True,
+                                key=f"receipt_check_{item_name}"
+                            )
+                            
+                            # Quantity input (only shown if selected)
+                            if selected:
+                                qty = st.number_input(
+                                    "Quantity (g/ml)",
+                                    min_value=1,
+                                    value=500,
+                                    step=50,
+                                    key=f"receipt_qty_{item_name}"
+                                )
+                                st.session_state.receipt_items[item_name] = qty
+                            elif item_name in st.session_state.receipt_items:
+                                del st.session_state.receipt_items[item_name]
+                    
+                    st.markdown("---")
+                    
+                    if st.session_state.receipt_items:
+                        col1, col2 = st.columns(2)
+                        
+                        with col1:
+                            if st.button("✅ Add to Inventory", type="primary", use_container_width=True):
+                                for item, qty in st.session_state.receipt_items.items():
+                                    st.session_state.inventory[item] = qty
+                                st.success(f"✨ Added {len(st.session_state.receipt_items)} items to inventory!")
+                                st.session_state.receipt_items = {}
+                                st.rerun()
+                        
+                        with col2:
+                            if st.button("🛒 Add to Grocery List", use_container_width=True):
+                                for item in st.session_state.receipt_items.keys():
+                                    st.session_state.grocery_list.add(item)
+                                st.success(f"✨ Added {len(st.session_state.receipt_items)} items to grocery!")
+                                st.session_state.receipt_items = {}
+                                st.rerun()
+                else:
+                    st.warning("⚠️ No food items detected. Try a clearer photo or different angle.")
+
+# ────────────── INGREDIENT SCANNER TAB ──────────────
+with tab_ingredient_scan:
+    st.subheader("📸 Ingredient Scanner")
+    st.info("Take photo of ingredients → AI identifies them → Review & add to inventory")
+    
+    col_cam, col_upload = st.columns(2)
+    with col_cam:
+        ing_camera = st.camera_input("Take photo of ingredients", key="ing_camera")
+    with col_upload:
+        ing_upload = st.file_uploader("Or upload photo", type=["jpg", "jpeg", "png"], key="ing_upload")
+    
+    ing_img = ing_camera or ing_upload
+    
+    if ing_img is not None:
+        st.image(ing_img, caption="Your ingredients", use_column_width=True)
+        
+        if st.button("🔍 Detect Ingredients with AI", key="detect_ing_btn"):
+            with st.spinner("Analyzing photo..."):
+                image_bytes = ing_img.getvalue()
+                detected_items = detect_ingredients_from_image(image_bytes)
+                
+                if detected_items:
+                    st.success(f"✅ Detected {len(detected_items)} ingredients!")
+                    
+                    # Store in session state for editing
+                    if "scanned_ingredients" not in st.session_state:
+                        st.session_state.scanned_ingredients = {}
+                    
+                    st.markdown("### 📝 Review Detected Ingredients:")
+                    st.caption("Check items to add, uncheck to skip. Edit quantities as needed.")
+                    
+                    cols = st.columns(3)
+                    for idx, item in enumerate(detected_items):
+                        with cols[idx % 3]:
+                            item_name = item.lower()
+                            
+                            # Checkbox for selection
+                            selected = st.checkbox(
+                                f"**{item.capitalize()}**",
+                                value=True,
+                                key=f"ing_check_{item_name}"
+                            )
+                            
+                            # Quantity input (only shown if selected)
+                            if selected:
+                                qty = st.number_input(
+                                    "Quantity (g/ml)",
+                                    min_value=1,
+                                    value=500,
+                                    step=50,
+                                    key=f"ing_qty_{item_name}"
+                                )
+                                st.session_state.scanned_ingredients[item_name] = qty
+                            elif item_name in st.session_state.scanned_ingredients:
+                                del st.session_state.scanned_ingredients[item_name]
+                    
+                    st.markdown("---")
+                    
+                    if st.session_state.scanned_ingredients:
+                        col1, col2 = st.columns(2)
+                        
+                        with col1:
+                            if st.button("✅ Add to Inventory", type="primary", use_container_width=True, key="add_scanned_inv"):
+                                for item, qty in st.session_state.scanned_ingredients.items():
+                                    st.session_state.inventory[item] = qty
+                                st.success(f"✨ Added {len(st.session_state.scanned_ingredients)} items to inventory!")
+                                st.session_state.scanned_ingredients = {}
+                                st.rerun()
+                        
+                        with col2:
+                            if st.button("🛒 Add to Grocery List", use_container_width=True, key="add_scanned_grocery"):
+                                for item in st.session_state.scanned_ingredients.keys():
+                                    st.session_state.grocery_list.add(item)
+                                st.success(f"✨ Added {len(st.session_state.scanned_ingredients)} items to grocery!")
+                                st.session_state.scanned_ingredients = {}
+                                st.rerun()
+                else:
+                    st.warning("⚠️ No ingredients detected. Try a clearer photo.")
+
+# ────────────── DIET CHARTS TAB ──────────────
+with tab_diet:
+    st.subheader("🥗 Diet Charts")
+    st.info("Create personalized diet plans and meal schedules")
+    
+    # Create new diet chart
+    with st.expander("➕ Create New Diet Chart", expanded=False):
+        chart_name = st.text_input("Diet Chart Name", placeholder="e.g., Weight Loss Plan, Muscle Gain, Keto Diet")
+        
+        col1, col2 = st.columns(2)
+        with col1:
+            diet_type = st.selectbox(
+                "Diet Type",
+                ["Custom", "Weight Loss", "Weight Gain", "Maintenance", "Keto", "Vegan", "High Protein", "Low Carb"]
+            )
+        with col2:
+            duration = st.selectbox("Duration", ["1 Week", "2 Weeks", "1 Month", "3 Months", "Ongoing"])
+        
+        st.markdown("#### 🍽️ Meal Schedule")
+        
+        # Days of week
+        days = ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday"]
+        meals = ["Breakfast", "Mid-Morning Snack", "Lunch", "Evening Snack", "Dinner"]
+        
+        diet_schedule = {}
+        
+        day_tabs = st.tabs(days)
+        for day_idx, day in enumerate(days):
+            with day_tabs[day_idx]:
+                diet_schedule[day] = {}
+                for meal in meals:
+                    diet_schedule[day][meal] = st.text_area(
+                        f"{meal}",
+                        placeholder=f"Enter {meal.lower()} items...",
+                        height=80,
+                        key=f"diet_{day}_{meal}"
+                    )
+        
+        notes = st.text_area("Additional Notes", placeholder="Special instructions, supplements, etc.")
+        
+        if st.button("💾 Save Diet Chart", type="primary", use_container_width=True):
+            if chart_name:
+                st.session_state.diet_charts[chart_name] = {
+                    "type": diet_type,
+                    "duration": duration,
+                    "schedule": diet_schedule,
+                    "notes": notes,
+                    "created": datetime.now().strftime("%Y-%m-%d %H:%M")
+                }
+                st.success(f"✅ Saved: {chart_name}")
+                st.rerun()
+            else:
+                st.error("Please enter a diet chart name!")
+    
+    # Display existing diet charts
+    if st.session_state.diet_charts:
+        st.markdown("---")
+        st.markdown("### 📋 Your Diet Charts")
+        
+        for chart_name, chart_data in st.session_state.diet_charts.items():
+            with st.expander(f"📊 {chart_name} ({chart_data['type']} - {chart_data['duration']})", expanded=False):
+                st.caption(f"Created: {chart_data['created']}")
+                
+                # Edit mode toggle
+                edit_mode = st.checkbox(f"✏️ Edit this chart", key=f"edit_{chart_name}")
+                
+                if edit_mode:
+                    st.markdown("#### Edit Meal Schedule")
+                    
+                    updated_schedule = {}
+                    day_tabs_edit = st.tabs(days)
+                    
+                    for day_idx, day in enumerate(days):
+                        with day_tabs_edit[day_idx]:
+                            updated_schedule[day] = {}
+                            for meal in meals:
+                                current_value = chart_data['schedule'].get(day, {}).get(meal, "")
+                                updated_schedule[day][meal] = st.text_area(
+                                    f"{meal}",
+                                    value=current_value,
+                                    height=80,
+                                    key=f"edit_{chart_name}_{day}_{meal}"
+                                )
+                    
+                    updated_notes = st.text_area(
+                        "Notes",
+                        value=chart_data.get('notes', ''),
+                        key=f"edit_notes_{chart_name}"
+                    )
+                    
                     col1, col2 = st.columns(2)
                     with col1:
-                        if st.button("Add Selected to Grocery"):
-                            st.session_state.grocery_list.update(selected)
-                            st.success(f"Added {len(selected)} items to grocery!")
+                        if st.button("💾 Save Changes", key=f"save_{chart_name}", use_container_width=True):
+                            st.session_state.diet_charts[chart_name]['schedule'] = updated_schedule
+                            st.session_state.diet_charts[chart_name]['notes'] = updated_notes
+                            st.success("✅ Changes saved!")
+                            st.rerun()
+                    
                     with col2:
-                        if st.button("Add Selected to Inventory"):
-                            for item in selected:
-                                st.session_state.inventory[item.lower()] = 500
-                            st.success(f"Added {len(selected)} items to inventory!")
+                        if st.button("🗑️ Delete Chart", key=f"delete_{chart_name}", use_container_width=True):
+                            del st.session_state.diet_charts[chart_name]
+                            st.success("✅ Chart deleted!")
+                            st.rerun()
+                
                 else:
-                    st.warning("No ingredients detected. Try a clearer photo.")
+                    # View mode
+                    st.markdown("#### 📅 Weekly Schedule")
+                    
+                    view_day_tabs = st.tabs(days)
+                    for day_idx, day in enumerate(days):
+                        with view_day_tabs[day_idx]:
+                            for meal in meals:
+                                meal_content = chart_data['schedule'].get(day, {}).get(meal, "")
+                                if meal_content:
+                                    st.markdown(f"**{meal}:**")
+                                    st.write(meal_content)
+                                    st.markdown("---")
+                    
+                    if chart_data.get('notes'):
+                        st.markdown("#### 📝 Notes")
+                        st.info(chart_data['notes'])
+    else:
+        st.info("📝 No diet charts yet. Create your first one above!")
+
 # ────────────────────────────────────────────────
 #  AUTO-SAVE INVENTORY & RELATED DATA TO FIRESTORE
 # ────────────────────────────────────────────────
@@ -3190,6 +3439,7 @@ if st.session_state.get("is_authenticated", False) and st.session_state.get("use
             "inventory_prices": dict(st.session_state.inventory_prices),
             "inventory_expiry": dict(st.session_state.inventory_expiry),
             "grocery_list": list(st.session_state.grocery_list),
+            "diet_charts": dict(st.session_state.diet_charts),  # Save diet charts
             "last_updated": datetime.now().isoformat()
         }
         
